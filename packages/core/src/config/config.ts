@@ -5,6 +5,8 @@
  */
 
 import * as path from 'node:path';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
 import process from 'node:process';
 import type {
   ContentGenerator,
@@ -288,6 +290,7 @@ export class Config {
   private readonly cwd: string;
   private readonly bugCommand: BugCommandSettings | undefined;
   private model: string;
+  private customModels: Record<string, import('../adapters/base/index.js').ModelConfig> = {};
   private readonly extensionContextFilePaths: string[];
   private readonly noBrowser: boolean;
   private readonly folderTrustFeature: boolean;
@@ -439,6 +442,11 @@ export class Config {
     }
     this.geminiClient = new GeminiClient(this);
     this.modelRouterService = new ModelRouterService(this);
+
+    // Load custom model configurations if model router is enabled
+    if (this.useModelRouter) {
+      this.loadCustomModelConfigs();
+    }
   }
 
   /**
@@ -545,8 +553,58 @@ export class Config {
     this.model = newModel;
   }
 
+  /**
+   * Get custom model configurations
+   */
+  getCustomModels(): Record<string, import('../adapters/base/index.js').ModelConfig> {
+    return { ...this.customModels };
+  }
+
+  /**
+   * Set a custom model configuration
+   */
+  setCustomModel(name: string, config: import('../adapters/base/index.js').ModelConfig): void {
+    this.customModels[name] = config;
+  }
+
+  /**
+   * Remove a custom model configuration
+   */
+  removeCustomModel(name: string): void {
+    delete this.customModels[name];
+  }
+
   isInFallbackMode(): boolean {
     return this.inFallbackMode;
+  }
+
+  /**
+   * Load custom model configurations from ~/.gemini/config.json
+   */
+  private loadCustomModelConfigs(): void {
+    try {
+      const configPath = path.join(os.homedir(), '.gemini', 'config.json');
+      const configContent = fs.readFileSync(configPath, 'utf8');
+      const config = JSON.parse(configContent);
+
+      if (config.models) {
+        // Convert config.json format to ModelConfig format
+        for (const [modelName, modelDef] of Object.entries(config.models)) {
+          const modelConfig: any = {
+            provider: (modelDef as any).provider || 'custom',
+            model: (modelDef as any).model || modelName,
+            apiKey: (modelDef as any).apiKey || '',
+            baseUrl: (modelDef as any).baseUrl || '',
+            options: (modelDef as any).options || {}
+          };
+
+          this.customModels[modelName] = modelConfig;
+        }
+        console.log(`Loaded ${Object.keys(config.models).length} custom model configurations`);
+      }
+    } catch (error) {
+      console.log('Could not load custom model configurations:', error instanceof Error ? error.message : 'Unknown error');
+    }
   }
 
   setFallbackMode(active: boolean): void {

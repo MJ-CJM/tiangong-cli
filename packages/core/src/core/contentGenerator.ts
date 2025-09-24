@@ -19,6 +19,7 @@ import type { Config } from '../config/config.js';
 import type { UserTierId } from '../code_assist/types.js';
 import { LoggingContentGenerator } from './loggingContentGenerator.js';
 import { InstallationManager } from '../utils/installationManager.js';
+import { PlaceholderContentGenerator } from './placeholderContentGenerator.js';
 
 /**
  * Interface abstracting the core functionalities for generating content and counting tokens.
@@ -46,6 +47,7 @@ export enum AuthType {
   USE_GEMINI = 'gemini-api-key',
   USE_VERTEX_AI = 'vertex-ai',
   CLOUD_SHELL = 'cloud-shell',
+  USE_CUSTOM = 'custom-model',
 }
 
 export type ContentGeneratorConfig = {
@@ -146,6 +148,20 @@ export async function createContentGenerator(
     });
     return new LoggingContentGenerator(googleGenAI.models, gcConfig);
   }
+
+  if (config.authType === AuthType.USE_CUSTOM) {
+    // For custom models, use placeholder content generator
+    // The actual routing should be handled by model router in the client
+    if (gcConfig?.getUseModelRouter()) {
+      return new LoggingContentGenerator(
+        new PlaceholderContentGenerator(),
+        gcConfig
+      );
+    } else {
+      throw new Error('Model router must be enabled for custom auth type');
+    }
+  }
+
   throw new Error(
     `Error creating contentGenerator: Unsupported authType: ${config.authType}`,
   );

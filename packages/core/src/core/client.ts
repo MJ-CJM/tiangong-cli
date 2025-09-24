@@ -27,6 +27,11 @@ import { reportError } from '../utils/errorReporting.js';
 import { GeminiChat } from './geminiChat.js';
 import { retryWithBackoff } from '../utils/retry.js';
 import { getErrorMessage } from '../utils/errors.js';
+import { ModelService } from '../services/modelService.js';
+import type { UnifiedRequest, MessageRole } from '../adapters/base/types.js';
+import * as path from 'node:path';
+import * as fs from 'node:fs';
+import { homedir } from 'node:os';
 import { isFunctionResponse } from '../utils/messageInspectors.js';
 import { tokenLimit } from './tokenLimits.js';
 import type { ChatRecordingService } from '../services/chatRecordingService.js';
@@ -434,6 +439,11 @@ export class GeminiClient {
     prompt_id: string,
     turns: number = MAX_TURNS,
   ): AsyncGenerator<ServerGeminiStreamEvent, Turn> {
+    // If model router is enabled, use ModelService instead of Gemini API
+    if (this.config.getUseModelRouter()) {
+      yield* this.sendMessageStreamWithModelRouter(request, signal, prompt_id, turns);
+      return new Turn(this.getChat(), prompt_id);
+    }
     if (this.lastPromptId !== prompt_id) {
       this.loopDetector.reset(prompt_id);
       this.lastPromptId = prompt_id;
@@ -792,6 +802,15 @@ export class GeminiClient {
       };
     }
 
+    // Skip token counting for custom models when using model router
+    if (this.config.getUseModelRouter()) {
+      return {
+        originalTokenCount: 0,
+        newTokenCount: 0,
+        compressionStatus: CompressionStatus.NOOP,
+      };
+    }
+
     const { totalTokens: originalTokenCount } =
       await this.getContentGeneratorOrFail().countTokens({
         model,
@@ -920,6 +939,94 @@ export class GeminiClient {
       newTokenCount,
       compressionStatus: CompressionStatus.COMPRESSED,
     };
+  }
+
+  /**
+   * Handle sending message through ModelService when model router is enabled
+   */
+  private async *sendMessageStreamWithModelRouter(
+    request: PartListUnion,
+    signal: AbortSignal,
+    prompt_id: string,
+    turns: number
+  ): AsyncGenerator<ServerGeminiStreamEvent, void> {
+    try {
+      // Create ModelService instance
+      const modelService = new ModelService(this.config);
+
+      // Get history and add new user message
+      const history = this.getChat().getHistory(true);
+      const userContent = createUserContent(request);
+      const allMessages = [...history, userContent];
+
+      // Convert to unified format
+      const messages: UnifiedRequest['messages'] = allMessages.map(content => ({
+        role: content.role === 'user' ? 'user' as MessageRole : 'assistant' as MessageRole,
+        content: (content.parts || []).map(part => ({
+          type: 'text' as const,
+          text: part.text || ''
+        }))
+      }));
+
+      const modelName = this.config.getModel();
+      console.log('Using model from config.getModel():', modelName);
+
+      // For model router, try to use the configured default model from config.json
+      let actualModelName = modelName;
+      if (modelName === 'auto') {
+        // Try to read from config.json directly
+        try {
+          const configPath = path.join(homedir(), '.gemini', 'config.json');
+          const configContent = fs.readFileSync(configPath, 'utf8');
+          const config = JSON.parse(configContent);
+          if (config.defaultModel) {
+            actualModelName = config.defaultModel;
+            console.log('Using defaultModel from config.json:', actualModelName);
+          }
+        } catch (error) {
+          console.log('Could not read config.json, using auto model:', error instanceof Error ? error.message : 'Unknown error');
+        }
+      }
+
+      const unifiedRequest: UnifiedRequest = {
+        messages,
+        model: actualModelName,
+        maxTokens: 1000,
+        temperature: 0.1,
+      };
+
+      // Generate response
+      const response = await modelService.generateContent(unifiedRequest, actualModelName);
+
+      // Add user message to chat history
+      this.getChat().addHistory(userContent);
+
+      // Create model response and add to history
+      const modelResponse = {
+        role: 'model' as const,
+        parts: response.content?.map(part => ({ text: part.text || '' })) || [{ text: 'Error: No response content' }]
+      };
+      this.getChat().addHistory(modelResponse);
+
+      // Yield the response as a content event
+      yield {
+        type: GeminiEventType.Content,
+        value: response.content?.[0]?.text || 'Error: No response content'
+      };
+
+    } catch (error) {
+      console.error('Error in sendMessageStreamWithModelRouter:', error);
+      // Yield error event
+      yield {
+        type: GeminiEventType.Error,
+        value: {
+          error: {
+            message: error instanceof Error ? error.message : 'Unknown error',
+            status: 500
+          }
+        }
+      };
+    }
   }
 }
 

@@ -8,7 +8,14 @@ import { AuthType } from '@google/gemini-cli-core';
 import { loadEnvironment, loadSettings } from './settings.js';
 
 export function validateAuthMethod(authMethod: string): string | null {
-  loadEnvironment(loadSettings().merged);
+  const settings = loadSettings();
+  loadEnvironment(settings.merged);
+
+  // If model router is enabled, skip Gemini auth validation
+  if (settings.merged.experimental?.useModelRouter) {
+    return null;
+  }
+
   if (
     authMethod === AuthType.LOGIN_WITH_GOOGLE ||
     authMethod === AuthType.CLOUD_SHELL
@@ -36,6 +43,11 @@ export function validateAuthMethod(authMethod: string): string | null {
         'Update your environment and try again (no reload needed if using .env)!'
       );
     }
+    return null;
+  }
+
+  if (authMethod === AuthType.USE_CUSTOM) {
+    // For custom models, validation is handled by the model router
     return null;
   }
 

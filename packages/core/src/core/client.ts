@@ -10,13 +10,18 @@ import type {
   Content,
   Tool,
   GenerateContentResponse,
+  FunctionDeclaration,
 } from '@google/genai';
-import { createUserContent } from '@google/genai';
+import { createUserContent, FinishReason } from '@google/genai';
 import {
   getDirectoryContextString,
   getEnvironmentContext,
 } from '../utils/environmentContext.js';
-import type { ServerGeminiStreamEvent, ChatCompressionInfo } from './turn.js';
+import type {
+  ServerGeminiStreamEvent,
+  ChatCompressionInfo,
+  StructuredError,
+} from './turn.js';
 import { CompressionStatus } from './turn.js';
 import { Turn, GeminiEventType } from './turn.js';
 import type { Config } from '../config/config.js';
@@ -28,7 +33,9 @@ import { GeminiChat } from './geminiChat.js';
 import { retryWithBackoff } from '../utils/retry.js';
 import { getErrorMessage } from '../utils/errors.js';
 import { ModelService } from '../services/modelService.js';
-import type { UnifiedRequest, MessageRole } from '../adapters/base/types.js';
+import type { UnifiedRequest, ContentPart, ToolDefinition } from '../adapters/base/types.js';
+import { MessageRole } from '../adapters/base/types.js';
+import { APITranslator } from '../adapters/utils/apiTranslator.js';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { homedir } from 'node:os';
@@ -948,33 +955,23 @@ export class GeminiClient {
     request: PartListUnion,
     signal: AbortSignal,
     prompt_id: string,
-    turns: number
+    _turns: number
   ): AsyncGenerator<ServerGeminiStreamEvent, void> {
     try {
-      // Create ModelService instance
       const modelService = new ModelService(this.config);
 
-      // Get history and add new user message
       const history = this.getChat().getHistory(true);
       const userContent = createUserContent(request);
-      const allMessages = [...history, userContent];
-
-      // Convert to unified format
-      const messages: UnifiedRequest['messages'] = allMessages.map(content => ({
-        role: content.role === 'user' ? 'user' as MessageRole : 'assistant' as MessageRole,
-        content: (content.parts || []).map(part => ({
-          type: 'text' as const,
-          text: part.text || ''
-        }))
-      }));
+      const historyMessages = history.map((content) =>
+        APITranslator.geminiContentToUnified(content),
+      );
+      const userMessage = APITranslator.geminiContentToUnified(userContent);
 
       const modelName = this.config.getModel();
       console.log('Using model from config.getModel():', modelName);
 
-      // For model router, try to use the configured default model from config.json
       let actualModelName = modelName;
       if (modelName === 'auto') {
-        // Try to read from config.json directly
         try {
           const configPath = path.join(homedir(), '.gemini', 'config.json');
           const configContent = fs.readFileSync(configPath, 'utf8');
@@ -984,49 +981,239 @@ export class GeminiClient {
             console.log('Using defaultModel from config.json:', actualModelName);
           }
         } catch (error) {
-          console.log('Could not read config.json, using auto model:', error instanceof Error ? error.message : 'Unknown error');
+          console.log(
+            'Could not read config.json, using auto model:',
+            error instanceof Error ? error.message : 'Unknown error',
+          );
         }
       }
 
       const unifiedRequest: UnifiedRequest = {
-        messages,
+        messages: [...historyMessages, userMessage],
         model: actualModelName,
         maxTokens: 1000,
         temperature: 0.1,
       };
 
-      // Generate response
-      const response = await modelService.generateContent(unifiedRequest, actualModelName);
+      const tools = this.getUnifiedTools();
+      if (tools.length > 0) {
+        unifiedRequest.tools = tools;
+      }
 
-      // Add user message to chat history
+      const response = await modelService.generateContent(
+        unifiedRequest,
+        actualModelName,
+      );
+
+      if (signal.aborted) {
+        yield { type: GeminiEventType.UserCancelled };
+        return;
+      }
+
       this.getChat().addHistory(userContent);
 
-      // Create model response and add to history
+      const enrichedContent: ContentPart[] = [];
+      let pendingText = '';
+
+      const rawContent = response.content ?? [];
+      for (const part of rawContent) {
+        if (part.type === 'text') {
+          enrichedContent.push(part);
+          pendingText += part.text || '';
+          continue;
+        }
+
+        if (part.type === 'function_call' && part.functionCall) {
+          if (pendingText) {
+            yield {
+              type: GeminiEventType.Content,
+              value: pendingText,
+            };
+            pendingText = '';
+          }
+
+          const callId =
+            part.functionCall.id ??
+            this.generateToolCallId(part.functionCall.name);
+
+          const functionCall = {
+            ...part.functionCall,
+            id: callId,
+          };
+
+          const functionCallPart: ContentPart = {
+            type: 'function_call',
+            functionCall,
+          };
+
+          enrichedContent.push(functionCallPart);
+
+          yield {
+            type: GeminiEventType.ToolCallRequest,
+            value: {
+              callId,
+              name: functionCall.name || 'undefined_tool_name',
+              args: functionCall.args || {},
+              isClientInitiated: false,
+              prompt_id,
+            },
+          };
+          continue;
+        }
+
+        if (pendingText) {
+          yield {
+            type: GeminiEventType.Content,
+            value: pendingText,
+          };
+          pendingText = '';
+        }
+
+        enrichedContent.push(part);
+      }
+
+      if (pendingText) {
+        yield {
+          type: GeminiEventType.Content,
+          value: pendingText,
+        };
+      }
+
+      const assistantUnifiedMessage = {
+        role: MessageRole.ASSISTANT,
+        content: enrichedContent,
+      };
+
+      const geminiAssistantContent =
+        APITranslator.unifiedToGeminiContent(assistantUnifiedMessage);
+
       const modelResponse = {
         role: 'model' as const,
-        parts: response.content?.map(part => ({ text: part.text || '' })) || [{ text: 'Error: No response content' }]
+        parts: geminiAssistantContent.parts ?? [],
       };
       this.getChat().addHistory(modelResponse);
 
-      // Yield the response as a content event
+      const finishReason = this.mapFinishReason(response.finishReason);
       yield {
-        type: GeminiEventType.Content,
-        value: response.content?.[0]?.text || 'Error: No response content'
+        type: GeminiEventType.Finished,
+        value: {
+          reason: finishReason,
+          usageMetadata: response.usage
+            ? {
+                promptTokenCount: response.usage.promptTokens,
+                totalTokenCount: response.usage.totalTokens,
+                candidatesTokenCount: response.usage.completionTokens,
+              }
+            : undefined,
+        },
       };
 
     } catch (error) {
       console.error('Error in sendMessageStreamWithModelRouter:', error);
-      // Yield error event
+      const structuredError: StructuredError = {
+        message: getErrorMessage(error as Error),
+        status:
+          (error as { statusCode?: number }).statusCode ??
+          (error as { status?: number }).status ??
+          500,
+      };
       yield {
         type: GeminiEventType.Error,
         value: {
-          error: {
-            message: error instanceof Error ? error.message : 'Unknown error',
-            status: 500
-          }
-        }
+          error: structuredError,
+        },
       };
     }
+  }
+
+  private getUnifiedTools(): ToolDefinition[] {
+    const toolRegistry = this.config.getToolRegistry();
+    const declarations =
+      typeof toolRegistry.getFunctionDeclarations === 'function'
+        ? toolRegistry.getFunctionDeclarations()
+        : [];
+
+    const tools: ToolDefinition[] = [];
+    for (const declaration of declarations as FunctionDeclaration[]) {
+      if (!declaration?.name) {
+        continue;
+      }
+      tools.push({
+        name: declaration.name,
+        description: declaration.description ?? '',
+        parameters: this.extractParametersSchema(declaration),
+      });
+    }
+
+    return tools;
+  }
+
+  private extractParametersSchema(
+    declaration: FunctionDeclaration,
+  ): { type: 'object'; properties: Record<string, any>; required?: string[] } {
+    const parameterSchema = declaration.parametersJsonSchema;
+
+    if (
+      parameterSchema &&
+      typeof parameterSchema === 'object' &&
+      !Array.isArray(parameterSchema)
+    ) {
+      return this.ensureObjectSchema(parameterSchema as Record<string, any>);
+    }
+
+    if (declaration.parameters && typeof declaration.parameters === 'object') {
+      try {
+        const parsed = JSON.parse(JSON.stringify(declaration.parameters));
+        return this.ensureObjectSchema(parsed);
+      } catch {
+        // fall through to default schema
+      }
+    }
+
+    return { type: 'object', properties: {} };
+  }
+
+  private mapFinishReason(reason?: string): FinishReason {
+    switch (reason) {
+      case 'length':
+        return FinishReason.MAX_TOKENS;
+      case 'function_call':
+        return FinishReason.OTHER;
+      case 'content_filter':
+        return FinishReason.SAFETY;
+      case 'stop':
+      default:
+        return FinishReason.STOP;
+    }
+  }
+
+  private generateToolCallId(toolName?: string): string {
+    const safeName =
+      (toolName && toolName.replace(/[^a-zA-Z0-9_-]/g, '')) || 'tool';
+    return `${safeName}-${Date.now().toString(16)}-${Math.random()
+      .toString(16)
+      .slice(2, 10)}`;
+  }
+
+  private ensureObjectSchema(
+    schema: Record<string, any>,
+  ): { type: 'object'; properties: Record<string, any>; required?: string[] } {
+    const normalized = { ...schema };
+    if (normalized['type'] !== 'object') {
+      normalized['type'] = 'object';
+    }
+    if (
+      !normalized['properties'] ||
+      typeof normalized['properties'] !== 'object' ||
+      Array.isArray(normalized['properties'])
+    ) {
+      normalized['properties'] = {};
+    }
+    return normalized as {
+      type: 'object';
+      properties: Record<string, any>;
+      required?: string[];
+    };
   }
 }
 

@@ -46,7 +46,8 @@ export class APITranslator {
           type: 'function_call',
           functionCall: {
             name: part.functionCall.name,
-            args: part.functionCall.args
+            args: part.functionCall.args,
+            id: part.functionCall.id,
           }
         };
       }
@@ -55,7 +56,8 @@ export class APITranslator {
           type: 'function_response',
           functionResponse: {
             name: part.functionResponse.name,
-            content: part.functionResponse.response
+            content: part.functionResponse.response,
+            id: part.functionResponse.id,
           }
         };
       }
@@ -88,14 +90,16 @@ export class APITranslator {
           return {
             functionCall: {
               name: part.functionCall?.name,
-              args: part.functionCall?.args
+              args: part.functionCall?.args,
+              id: part.functionCall?.id,
             }
           };
         case 'function_response':
           return {
             functionResponse: {
               name: part.functionResponse?.name,
-              response: part.functionResponse?.content
+              response: part.functionResponse?.content,
+              id: part.functionResponse?.id,
             }
           };
         default:
@@ -145,7 +149,8 @@ export class APITranslator {
         type: 'function_call',
         functionCall: {
           name: message.function_call.name,
-          args: JSON.parse(message.function_call.arguments || '{}')
+          args: this.parseFunctionArguments(message.function_call.arguments),
+          id: message.function_call.id,
         }
       });
     }
@@ -158,7 +163,8 @@ export class APITranslator {
             type: 'function_call',
             functionCall: {
               name: toolCall.function.name,
-              args: JSON.parse(toolCall.function.arguments || '{}')
+              args: this.parseFunctionArguments(toolCall.function.arguments),
+              id: toolCall.id,
             }
           });
         }
@@ -180,7 +186,38 @@ export class APITranslator {
     const textParts = message.content.filter(part => part.type === 'text');
     const imageParts = message.content.filter(part => part.type === 'image');
     const functionCalls = message.content.filter(part => part.type === 'function_call');
-    // const functionResponses = message.content.filter(part => part.type === 'function_response');
+    const functionResponses = message.content.filter(part => part.type === 'function_response');
+
+    if (functionResponses.length > 0) {
+      const primaryResponse = functionResponses[0].functionResponse;
+      const fallbackText = textParts
+        .map((part) => part.text || '')
+        .filter(Boolean)
+        .join('\n');
+
+      let content = fallbackText;
+      if (!content || content.length === 0) {
+        const responsePayload = primaryResponse?.content ?? primaryResponse?.response;
+        if (typeof responsePayload === 'string') {
+          content = responsePayload;
+        } else if (responsePayload && typeof responsePayload === 'object') {
+          content = JSON.stringify(responsePayload);
+        }
+      }
+      if (!content || content.length === 0) {
+        content = 'Tool execution completed.';
+      }
+
+      return {
+        role: 'tool',
+        tool_call_id:
+          primaryResponse?.id ||
+          functionResponses[0].functionResponse?.name ||
+          `tool_${Date.now()}`,
+        name: primaryResponse?.name,
+        content,
+      };
+    }
 
     // Simple text message
     if (textParts.length === 1 && imageParts.length === 0 && functionCalls.length === 0) {
@@ -218,7 +255,7 @@ export class APITranslator {
     // Add function calls as tool_calls
     if (functionCalls.length > 0) {
       result.tool_calls = functionCalls.map((part, index) => ({
-        id: `call_${index}`,
+        id: part.functionCall?.id || `call_${index}`,
         type: 'function',
         function: {
           name: part.functionCall?.name,
@@ -302,7 +339,8 @@ export class APITranslator {
             type: 'function_call',
             functionCall: {
               name: toolCall.function.name,
-              args: JSON.parse(toolCall.function.arguments || '{}')
+              args: this.parseFunctionArguments(toolCall.function.arguments),
+              id: toolCall.id,
             }
           });
         }
@@ -343,5 +381,79 @@ export class APITranslator {
         parameters: tool.parameters
       }]
     };
+  }
+
+  private static parseFunctionArguments(
+    rawArguments?: string,
+  ): Record<string, any> {
+    if (!rawArguments || rawArguments.trim().length === 0) {
+      return {};
+    }
+
+    try {
+      return JSON.parse(rawArguments);
+    } catch (initialError) {
+      try {
+        const repaired = this.repairJsonString(rawArguments);
+        return JSON.parse(repaired);
+      } catch (repairError) {
+        console.warn(
+          'Failed to parse function arguments; returning empty object.',
+          repairError,
+        );
+        return {};
+      }
+    }
+  }
+
+  private static repairJsonString(raw: string): string {
+    let inString = false;
+    let isEscaped = false;
+    let repaired = '';
+
+    for (let i = 0; i < raw.length; i++) {
+      const char = raw[i];
+
+      if (inString) {
+        if (isEscaped) {
+          isEscaped = false;
+          repaired += char;
+          continue;
+        }
+
+        if (char === '\\') {
+          isEscaped = true;
+          repaired += char;
+          continue;
+        }
+
+        if (char === '"') {
+          inString = false;
+          repaired += char;
+          continue;
+        }
+
+        if (char === '\n') {
+          repaired += '\\n';
+          continue;
+        }
+
+        if (char === '\r') {
+          repaired += '\\r';
+          continue;
+        }
+
+        repaired += char;
+        continue;
+      }
+
+      if (char === '"') {
+        inString = true;
+      }
+
+      repaired += char;
+    }
+
+    return repaired;
   }
 }

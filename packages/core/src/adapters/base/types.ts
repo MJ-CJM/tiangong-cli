@@ -67,10 +67,13 @@ export interface ContentPart {
   functionCall?: {
     name: string;
     args: Record<string, any>;
+    id?: string;
   };
   functionResponse?: {
     name: string;
-    content: any;
+    content?: any;
+    response?: any;
+    id?: string;
   };
 }
 

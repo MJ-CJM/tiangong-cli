@@ -89,6 +89,20 @@ Slash commands provide meta-level control over the CLI itself.
       - **Description:** Reload the hierarchical instructional memory from all `GEMINI.md` files found in the configured locations (global, project/ancestors, and sub-directories). This command updates the model with the latest `GEMINI.md` content.
     - **Note:** For more details on how `GEMINI.md` files contribute to hierarchical memory, see the [CLI Configuration documentation](./configuration.md#4-geminimd-files-hierarchical-instructional-context).
 
+- **`/model`**
+  - **Description:** Inspect or change the Gemini model powering the current session.
+  - **Sub-commands:**
+    - **`current`**:
+      - **Description:** Show the requested model and highlight if fallback mode is active.
+      - **Usage:** `/model current`
+    - **`list`**:
+      - **Description:** Display common Gemini CLI models alongside any custom models loaded from configuration files.
+      - **Usage:** `/model list`
+    - **`use`**:
+      - **Description:** Switch the active model for subsequent prompts in the session.
+      - **Usage:** `/model use <model-name>`
+      - **Note:** Pro-tier models cannot be selected while fallback mode is active—resolve the underlying quota issue first.
+
 - **`/restore`**
   - **Description:** Restores the project files to the state they were in just before a tool was executed. This is particularly useful for undoing file edits made by a tool. If run without a tool call ID, it will list available checkpoints to restore from.
   - **Usage:** `/restore [tool_call_id]`

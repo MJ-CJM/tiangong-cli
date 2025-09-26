@@ -265,7 +265,15 @@ export async function main() {
 
   // Set a default auth type if one isn't set.
   if (!settings.merged.security?.auth?.selectedType) {
-    if (process.env['CLOUD_SHELL'] === 'true') {
+    const customModels = config.getCustomModels?.() ?? {};
+    const activeModel = config.getModel?.();
+    if (activeModel && customModels[activeModel]) {
+      settings.setValue(
+        SettingScope.User,
+        'selectedAuthType',
+        AuthType.USE_CUSTOM,
+      );
+    } else if (process.env['CLOUD_SHELL'] === 'true') {
       settings.setValue(
         SettingScope.User,
         'selectedAuthType',

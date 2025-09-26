@@ -110,6 +110,13 @@ export async function getCorrectedFileContent(
   // So, file was either read successfully (fileExists=true, originalContent set)
   // or it was ENOENT (fileExists=false, originalContent='').
 
+  // When the model router is active we can't call correction helpers because they
+  // rely on Gemini-specific JSON endpoints. In that case just return the
+  // proposed content unchanged and let subsequent validation handle it.
+  if (config.getUseModelRouter()) {
+    return { originalContent, correctedContent, fileExists };
+  }
+
   if (fileExists) {
     // This implies originalContent is available
     const { params: correctedParams } = await ensureCorrectEdit(

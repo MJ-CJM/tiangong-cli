@@ -398,10 +398,104 @@ export class APITranslator {
         return JSON.parse(repaired);
       } catch (repairError) {
         console.warn(
-          'Failed to parse function arguments; returning empty object.',
+          'Failed to parse function arguments; trying parameter extraction.',
           repairError,
         );
-        return {};
+
+        // Try to extract parameters from malformed JSON-like strings
+        const result: Record<string, any> = {};
+
+        // More robust parameter extraction with better regex patterns
+        // Try to extract file_path parameter with various formats
+        const filePathPatterns = [
+          /(?:["']?file_path["']?\s*[:=]\s*["']([^"']*?)["'])/i,
+          /(?:["']?file_path["']?\s*[:=]\s*([^,}\s]+))/i,
+          /(?:file_path["']?\s*[:=]\s*["']?([^"',}]+))/i,
+        ];
+
+        for (const pattern of filePathPatterns) {
+          const match = rawArguments.match(pattern);
+          if (match && match[1] && match[1].trim()) {
+            result['file_path'] = match[1].trim();
+            break;
+          }
+        }
+
+        // Extract content parameter with better handling of multiline content
+        const contentPatterns = [
+          /(?:["']?content["']?\s*[:=]\s*["'])([\s\S]*?)(?:["'](?:\s*[,}]|$))/i,
+          /(?:["']?content["']?\s*[:=]\s*)([\s\S]*?)(?=\s*(?:,\s*["']?\w+["']?\s*[:=]|$|}))/i,
+        ];
+
+        for (const pattern of contentPatterns) {
+          const match = rawArguments.match(pattern);
+          if (match && match[1]) {
+            let content = match[1].trim();
+            // Clean up content - remove trailing quotes or brackets
+            content = content.replace(/["'}]*$/, '').trim();
+            if (content) {
+              result['content'] = content;
+              break;
+            }
+          }
+        }
+
+        // Extract old_string parameter
+        const oldStringPatterns = [
+          /(?:["']?old_string["']?\s*[:=]\s*["'])([\s\S]*?)(?:["'](?:\s*[,}]|$))/i,
+          /(?:["']?old_string["']?\s*[:=]\s*)([\s\S]*?)(?=\s*(?:,\s*["']?\w+["']?\s*[:=]|$|}))/i,
+        ];
+
+        for (const pattern of oldStringPatterns) {
+          const match = rawArguments.match(pattern);
+          if (match && match[1]) {
+            let oldString = match[1].trim();
+            oldString = oldString.replace(/["'}]*$/, '').trim();
+            if (oldString) {
+              result['old_string'] = oldString;
+              break;
+            }
+          }
+        }
+
+        // Extract new_string parameter
+        const newStringPatterns = [
+          /(?:["']?new_string["']?\s*[:=]\s*["'])([\s\S]*?)(?:["'](?:\s*[,}]|$))/i,
+          /(?:["']?new_string["']?\s*[:=]\s*)([\s\S]*?)(?=\s*(?:,\s*["']?\w+["']?\s*[:=]|$|}))/i,
+        ];
+
+        for (const pattern of newStringPatterns) {
+          const match = rawArguments.match(pattern);
+          if (match && match[1]) {
+            let newString = match[1].trim();
+            newString = newString.replace(/["'}]*$/, '').trim();
+            if (newString) {
+              result['new_string'] = newString;
+              break;
+            }
+          }
+        }
+
+        // If we still have no parameters, try a final fallback approach
+        if (Object.keys(result).length === 0) {
+          // Look for any key-value patterns in the string
+          const fallbackPattern = /(\w+)\s*[:=]\s*(.+?)(?=\s*,\s*\w+\s*[:=]|$)/g;
+          let match;
+          while ((match = fallbackPattern.exec(rawArguments)) !== null) {
+            const key = match[1].trim();
+            let value = match[2].trim();
+
+            // Clean up the value
+            value = value.replace(/^["']|["']$/g, '').trim();
+            value = value.replace(/[}]*$/, '').trim();
+
+            if (value && ['file_path', 'content', 'old_string', 'new_string'].includes(key)) {
+              result[key] = value;
+            }
+          }
+        }
+
+        return result;
       }
     }
   }

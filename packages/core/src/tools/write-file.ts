@@ -427,9 +427,14 @@ export class WriteFileTool
     params: WriteFileToolParams,
   ): string | null {
     const filePath = params.file_path;
+    const content = params.content;
 
     if (!filePath) {
-      return `Missing or empty "file_path"`;
+      return `Missing or empty "file_path". Required parameters: file_path (string), content (string)`;
+    }
+
+    if (content === undefined || content === null) {
+      return `Missing "content" parameter. Required parameters: file_path (string), content (string)`;
     }
 
     if (!path.isAbsolute(filePath)) {

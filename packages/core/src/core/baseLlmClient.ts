@@ -250,7 +250,7 @@ export class BaseLlmClient {
       const unifiedRequest: UnifiedRequest = {
         messages,
         model: model || this.config.getModel(),
-        maxTokens: 1000,
+        maxTokens: 65536, // Increased from 1000 to allow for longer responses
         temperature: 0,
         systemMessage: typeof systemInstruction === 'string' ? systemInstruction : undefined
       };

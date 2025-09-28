@@ -156,6 +156,17 @@ export class CustomAdapter extends AbstractModelClient {
       if (item.type === 'text') {
         return { type: 'text' as const, text: item.text };
       }
+      // Handle Claude's tool_use format
+      if (item.type === 'tool_use') {
+        return {
+          type: 'function_call' as const,
+          functionCall: {
+            name: item.name,
+            args: item.input || {}, // Claude uses 'input' for function arguments
+            id: item.id || `tool_${Date.now()}`
+          }
+        };
+      }
       return { type: 'text' as const, text: '' };
     }) || [];
 
@@ -163,6 +174,7 @@ export class CustomAdapter extends AbstractModelClient {
       content,
       finishReason: response.stop_reason === 'end_turn' ? 'stop' :
                    response.stop_reason === 'max_tokens' ? 'length' :
+                   response.stop_reason === 'tool_use' ? 'function_call' :
                    'stop',
       usage: response.usage ? {
         promptTokens: response.usage.input_tokens || 0,
@@ -177,28 +189,220 @@ export class CustomAdapter extends AbstractModelClient {
    * Convert raw/unknown response to UnifiedResponse
    */
   private convertRawResponse(response: any): UnifiedResponse {
-    // Try to handle common response structures
-    let text = '';
+    const content: any[] = [];
 
+    // Handle text content first
+    let text = '';
     if (typeof response === 'string') {
       text = response;
     } else if (response.text) {
       text = response.text;
-    } else if (response.content) {
-      text = typeof response.content === 'string' ? response.content : JSON.stringify(response.content);
+    } else if (response.content && typeof response.content === 'string') {
+      text = response.content;
     } else if (response.message) {
       text = response.message;
     } else if (response.response) {
       text = response.response;
-    } else {
-      text = JSON.stringify(response);
+    } else if (response.choices && response.choices[0]?.message?.content) {
+      // Handle OpenAI choices format
+      text = response.choices[0].message.content;
+    }
+
+    // Add text content if present
+    if (text) {
+      content.push({
+        type: 'text',
+        text: text
+      });
+    }
+
+    // Then handle tool calls in various formats
+    if (response.tool_calls || response.function_call || response.tools ||
+        (response.choices && response.choices[0]?.message?.tool_calls)) {
+
+      // Handle different tool call formats
+      let toolCalls = response.tool_calls || response.tools;
+
+      // Handle OpenAI choices format
+      if (response.choices && response.choices[0]?.message?.tool_calls) {
+        toolCalls = response.choices[0].message.tool_calls;
+      }
+
+      // Handle single function_call (older format)
+      if (response.function_call) {
+        toolCalls = [response.function_call];
+      }
+
+      if (toolCalls) {
+        for (const toolCall of toolCalls) {
+          if (toolCall.function || toolCall.name) {
+            content.push({
+              type: 'function_call',
+              functionCall: {
+                name: toolCall.function?.name || toolCall.name,
+                args: this.safeParseArguments(toolCall.function?.arguments || toolCall.arguments || toolCall.input || {}),
+                id: toolCall.id || `tool_${Date.now()}_${Math.random().toString(16).slice(2)}`
+              }
+            });
+          }
+        }
+      }
+    }
+
+    // If no content was found, add a fallback
+    if (content.length === 0) {
+      content.push({
+        type: 'text',
+        text: JSON.stringify(response)
+      });
     }
 
     return {
-      content: [{ type: 'text', text }],
-      finishReason: 'stop',
+      content,
+      finishReason: this.mapFinishReason(response.finish_reason || response.stop_reason, content),
       model: this.config.model
     };
+  }
+
+  /**
+   * Safely parse function arguments, handling various formats
+   */
+  private safeParseArguments(args: any): Record<string, any> {
+    if (!args) return {};
+
+    if (typeof args === 'object' && !Array.isArray(args)) {
+      return args;
+    }
+
+    if (typeof args === 'string') {
+      try {
+        return JSON.parse(args);
+      } catch (error) {
+        console.warn('Failed to parse function arguments in CustomAdapter; trying parameter extraction.', error);
+
+        // Try to extract parameters from malformed JSON-like strings
+        const result: Record<string, any> = {};
+
+        // More robust parameter extraction with better regex patterns
+        // Try to extract file_path parameter with various formats
+        const filePathPatterns = [
+          /(?:["']?file_path["']?\s*[:=]\s*["']([^"']*?)["'])/i,
+          /(?:["']?file_path["']?\s*[:=]\s*([^,}\s]+))/i,
+          /(?:file_path["']?\s*[:=]\s*["']?([^"',}]+))/i,
+        ];
+
+        for (const pattern of filePathPatterns) {
+          const match = args.match(pattern);
+          if (match && match[1] && match[1].trim()) {
+            result['file_path'] = match[1].trim();
+            break;
+          }
+        }
+
+        // Extract content parameter with better handling of multiline content
+        const contentPatterns = [
+          /(?:["']?content["']?\s*[:=]\s*["'])([\s\S]*?)(?:["'](?:\s*[,}]|$))/i,
+          /(?:["']?content["']?\s*[:=]\s*)([\s\S]*?)(?=\s*(?:,\s*["']?\w+["']?\s*[:=]|$|}))/i,
+        ];
+
+        for (const pattern of contentPatterns) {
+          const match = args.match(pattern);
+          if (match && match[1]) {
+            let content = match[1].trim();
+            // Clean up content - remove trailing quotes or brackets
+            content = content.replace(/["'}]*$/, '').trim();
+            if (content) {
+              result['content'] = content;
+              break;
+            }
+          }
+        }
+
+        // Extract old_string parameter
+        const oldStringPatterns = [
+          /(?:["']?old_string["']?\s*[:=]\s*["'])([\s\S]*?)(?:["'](?:\s*[,}]|$))/i,
+          /(?:["']?old_string["']?\s*[:=]\s*)([\s\S]*?)(?=\s*(?:,\s*["']?\w+["']?\s*[:=]|$|}))/i,
+        ];
+
+        for (const pattern of oldStringPatterns) {
+          const match = args.match(pattern);
+          if (match && match[1]) {
+            let oldString = match[1].trim();
+            oldString = oldString.replace(/["'}]*$/, '').trim();
+            if (oldString) {
+              result['old_string'] = oldString;
+              break;
+            }
+          }
+        }
+
+        // Extract new_string parameter
+        const newStringPatterns = [
+          /(?:["']?new_string["']?\s*[:=]\s*["'])([\s\S]*?)(?:["'](?:\s*[,}]|$))/i,
+          /(?:["']?new_string["']?\s*[:=]\s*)([\s\S]*?)(?=\s*(?:,\s*["']?\w+["']?\s*[:=]|$|}))/i,
+        ];
+
+        for (const pattern of newStringPatterns) {
+          const match = args.match(pattern);
+          if (match && match[1]) {
+            let newString = match[1].trim();
+            newString = newString.replace(/["'}]*$/, '').trim();
+            if (newString) {
+              result['new_string'] = newString;
+              break;
+            }
+          }
+        }
+
+        // If we still have no parameters, try a final fallback approach
+        if (Object.keys(result).length === 0) {
+          // Look for any key-value patterns in the string
+          const fallbackPattern = /(\w+)\s*[:=]\s*(.+?)(?=\s*,\s*\w+\s*[:=]|$)/g;
+          let match;
+          while ((match = fallbackPattern.exec(args)) !== null) {
+            const key = match[1].trim();
+            let value = match[2].trim();
+
+            // Clean up the value
+            value = value.replace(/^["']|["']$/g, '').trim();
+            value = value.replace(/[}]*$/, '').trim();
+
+            if (value && ['file_path', 'content', 'old_string', 'new_string'].includes(key)) {
+              result[key] = value;
+            }
+          }
+        }
+
+        return result;
+      }
+    }
+
+    return {};
+  }
+
+  /**
+   * Map finish reasons to standard format
+   */
+  private mapFinishReason(reason: string | undefined, content: any[]): 'stop' | 'length' | 'function_call' | 'content_filter' {
+    // If there are function calls, it's function_call regardless of the stated reason
+    if (content.some(c => c.type === 'function_call')) {
+      return 'function_call';
+    }
+
+    // Map common finish reasons
+    switch (reason) {
+      case 'tool_calls':
+        return 'function_call';
+      case 'max_tokens':
+      case 'length':
+        return 'length';
+      case 'content_filter':
+        return 'content_filter';
+      case 'end_turn':
+      case 'stop':
+      default:
+        return 'stop';
+    }
   }
 
   /**

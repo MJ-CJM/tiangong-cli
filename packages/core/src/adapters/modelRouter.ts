@@ -81,14 +81,18 @@ export class ModelRouter {
    */
   private async getAdapter(config: ModelConfig): Promise<BaseModelClient> {
     const key = this.getAdapterKey(config);
+    console.log(`Getting adapter for config:`, config);
 
     if (!this.adapters.has(key)) {
+      console.log(`Creating new adapter for ${config.provider}:${config.model}`);
       const adapter = this.registry.createAdapter(config);
 
       // Validate the adapter can make requests
       try {
         await adapter.validate();
+        console.log(`Adapter validation successful for ${config.provider}:${config.model}`);
       } catch (error) {
+        console.log(`Adapter validation failed for ${config.provider}:${config.model}:`, error);
         throw new ModelAdapterError(
           `Failed to validate adapter for ${config.provider}:${config.model}`,
           config.provider,
@@ -99,6 +103,8 @@ export class ModelRouter {
       }
 
       this.adapters.set(key, adapter);
+    } else {
+      console.log(`Using cached adapter for ${config.provider}:${config.model}`);
     }
 
     return this.adapters.get(key)!;
@@ -122,6 +128,7 @@ export class ModelRouter {
       const adapter = await this.getAdapter(config);
       return await adapter.generateContent(request);
     } catch (error) {
+      console.log(`Primary adapter failed for ${config.provider}:${config.model}:`, error);
       errors.push(error as Error);
     }
 

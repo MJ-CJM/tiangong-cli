@@ -115,12 +115,26 @@ export function getModelConfig(modelString: string, customConfigs?: Record<strin
     };
   }
 
+  // For unknown models, try to detect provider or default to custom
+  // If model contains known provider patterns, use custom provider
+  if (modelString.includes('qwen') || modelString.includes('coder') || modelString.includes('flash')) {
+    const config = {
+      provider: 'custom' as ModelProvider,
+      model: modelString,
+      authType: 'api-key' as AuthType
+    };
+    console.log(`Detected custom model configuration for ${modelString}:`, config);
+    return config;
+  }
+
   // Default to Gemini for unknown models (backward compatibility)
-  return {
+  const config = {
     provider: 'gemini' as ModelProvider,
     model: modelString,
     authType: 'api-key' as AuthType
   };
+  console.log(`Using default Gemini configuration for ${modelString}:`, config);
+  return config;
 }
 
 /**
@@ -172,8 +186,8 @@ export function getFallbackConfigs(modelConfig: ModelConfig): ModelConfig[] {
       break;
   }
 
-  // Ultimate fallback to Gemini Flash
-  if (modelConfig.provider !== 'gemini') {
+  // Ultimate fallback to Gemini Flash (but not for custom models)
+  if (modelConfig.provider !== 'gemini' && modelConfig.provider !== 'custom') {
     fallbacks.push(DEFAULT_MODEL_CONFIGS[DEFAULT_GEMINI_FLASH_MODEL]);
   }
 

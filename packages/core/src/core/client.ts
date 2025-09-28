@@ -991,7 +991,7 @@ export class GeminiClient {
       const unifiedRequest: UnifiedRequest = {
         messages: [...historyMessages, userMessage],
         model: actualModelName,
-        maxTokens: 1000,
+        maxTokens: 65536, // Increased from 1000 to allow for longer responses
         temperature: 0.1,
       };
 

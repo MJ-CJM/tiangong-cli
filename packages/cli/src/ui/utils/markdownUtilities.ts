@@ -96,8 +96,8 @@ export const findLastSafeSplitPoint = (content: string) => {
     content.length,
   );
   if (enclosingBlockStart !== -1) {
-    // The end of the content is contained in a code block. Split right before.
-    return enclosingBlockStart;
+    // The end of the content is contained in a code block. Don't split to prevent truncation.
+    return content.length;
   }
 
   // Search for the last double newline (\n\n) not in a code block.

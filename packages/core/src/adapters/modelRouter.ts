@@ -22,43 +22,51 @@ import {
 } from './base/index.js';
 
 import { logger } from '../utils/logger.js';
+import { AdapterRegistry } from './registry.js';
 
 /**
- * Registry for model adapters
+ * @deprecated Use AdapterRegistry instead
+ * Registry for model adapters - kept for backward compatibility
  */
 export class ModelAdapterRegistry {
-  private adapters = new Map<ModelProvider, new (config: ModelConfig) => BaseModelClient>();
+  private adapters = new Map<ModelProvider | string, new (config: ModelConfig) => BaseModelClient>();
 
   /**
    * Register a model adapter class for a provider
    */
-  register(provider: ModelProvider, adapterClass: new (config: ModelConfig) => BaseModelClient): void {
+  register(provider: ModelProvider | string, adapterClass: new (config: ModelConfig) => BaseModelClient): void {
     this.adapters.set(provider, adapterClass);
   }
 
   /**
    * Create an adapter instance for the given config
+   * Now delegates to AdapterRegistry
    */
   createAdapter(config: ModelConfig): BaseModelClient {
-    const AdapterClass = this.adapters.get(config.provider);
-    if (!AdapterClass) {
-      throw new ModelNotFoundError(config.provider, `No adapter registered for provider: ${config.provider}`);
+    try {
+      // Use new AdapterRegistry
+      return AdapterRegistry.createAdapter(config);
+    } catch (error) {
+      // Fallback to old behavior if AdapterRegistry fails
+      const AdapterClass = this.adapters.get(config.provider);
+      if (!AdapterClass) {
+        throw new ModelNotFoundError(config.provider as ModelProvider, `No adapter registered for provider: ${config.provider}`);
+      }
+      return new AdapterClass(config);
     }
-
-    return new AdapterClass(config);
   }
 
   /**
    * Get all registered providers
    */
-  getRegisteredProviders(): ModelProvider[] {
+  getRegisteredProviders(): (ModelProvider | string)[] {
     return Array.from(this.adapters.keys());
   }
 
   /**
    * Check if a provider is registered
    */
-  isProviderRegistered(provider: ModelProvider): boolean {
+  isProviderRegistered(provider: ModelProvider | string): boolean {
     return this.adapters.has(provider);
   }
 }

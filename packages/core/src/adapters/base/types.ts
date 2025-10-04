@@ -30,11 +30,31 @@ export enum ModelAuthType {
 export { ModelAuthType as AuthType };
 
 /**
+ * Model capabilities description
+ */
+export interface ModelCapabilities {
+  /** Maximum input tokens */
+  maxInputTokens?: number;
+  /** Maximum output tokens */
+  maxOutputTokens?: number;
+  /** Supports streaming responses */
+  supportsStreaming?: boolean;
+  /** Supports function calling */
+  supportsFunctionCalling?: boolean;
+  /** Supports vision/image inputs */
+  supportsVision?: boolean;
+  /** Supports tool calling */
+  supportsTools?: boolean;
+  /** Supports multimodal content (array format for messages) */
+  supportsMultimodal?: boolean;
+}
+
+/**
  * Configuration for a specific model provider
  */
 export interface ModelConfig {
   /** The provider type */
-  provider: ModelProvider;
+  provider: ModelProvider | string;
   /** The specific model name */
   model: string;
   /** API key for authentication */
@@ -45,8 +65,16 @@ export interface ModelConfig {
   authType?: ModelAuthType;
   /** Custom headers for requests */
   customHeaders?: Record<string, string>;
-  /** Maximum output tokens for this model */
+
+  /** Adapter type to use (overrides provider-based inference) */
+  adapterType?: 'openai' | 'claude' | 'gemini' | 'custom';
+
+  /** Model capabilities and limits */
+  capabilities?: ModelCapabilities;
+
+  /** @deprecated Use capabilities.maxOutputTokens instead */
   maxOutputTokens?: number;
+
   /** Additional provider-specific options */
   options?: Record<string, any>;
 }

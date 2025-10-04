@@ -452,7 +452,8 @@ export class CustomAdapter extends AbstractModelClient {
   private convertRequest(request: UnifiedRequest): any {
     switch (this.responseFormat) {
       case CustomResponseFormat.OPENAI:
-        const openaiRequest = APITranslator.unifiedToOpenaiRequest(request);
+        const supportsMultimodal = this.config.capabilities?.supportsMultimodal ?? true;
+        const openaiRequest = APITranslator.unifiedToOpenaiRequest(request, supportsMultimodal);
         openaiRequest.model = this.config.model;
         return openaiRequest;
 

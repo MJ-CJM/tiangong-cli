@@ -176,8 +176,10 @@ export class APITranslator {
 
   /**
    * Convert UnifiedMessage to OpenAI message format
+   * @param message The unified message to convert
+   * @param supportsMultimodal Whether the target model supports multimodal (array) content format
    */
-  static unifiedToOpenaiMessage(message: UnifiedMessage): any {
+  static unifiedToOpenaiMessage(message: UnifiedMessage, supportsMultimodal: boolean = true): any {
     const role = message.role === MessageRole.USER ? 'user' :
                  message.role === MessageRole.ASSISTANT ? 'assistant' :
                  message.role === MessageRole.SYSTEM ? 'system' :
@@ -187,6 +189,16 @@ export class APITranslator {
     const imageParts = message.content.filter(part => part.type === 'image');
     const functionCalls = message.content.filter(part => part.type === 'function_call');
     const functionResponses = message.content.filter(part => part.type === 'function_response');
+
+    // Debug log for messages with multiple text parts
+    if (textParts.length > 1 && process.env['DEBUG_MESSAGE_FORMAT']) {
+      console.log('[DEBUG] Message with multiple text parts:', {
+        role,
+        textPartsCount: textParts.length,
+        supportsMultimodal,
+        firstText: textParts[0].text?.substring(0, 50)
+      });
+    }
 
     if (functionResponses.length > 0) {
       const primaryResponse = functionResponses[0].functionResponse;
@@ -217,6 +229,45 @@ export class APITranslator {
         name: primaryResponse?.name,
         content,
       };
+    }
+
+    // For models that don't support multimodal format, always use string content
+    if (!supportsMultimodal) {
+      // Combine all text parts into a single string
+      const combinedText = textParts.map(part => part.text || '').join('\n').trim();
+
+      const result: any = {
+        role,
+        content: combinedText || ''
+      };
+
+      // Add function calls as tool_calls
+      if (functionCalls.length > 0) {
+        result.tool_calls = functionCalls.map((part, index) => ({
+          id: part.functionCall?.id || `call_${index}`,
+          type: 'function',
+          function: {
+            name: part.functionCall?.name,
+            arguments: JSON.stringify(part.functionCall?.args)
+          }
+        }));
+      }
+
+      // Debug: Log converted message
+      if (process.env['DEBUG_MESSAGE_FORMAT']) {
+        console.log('[DEBUG] Converted message (supportsMultimodal=false):', {
+          role,
+          contentType: typeof result.content,
+          contentLength: result.content.length,
+          hasToolCalls: !!result.tool_calls,
+          textPartsCount: textParts.length,
+          imageParts: imageParts.length,
+          functionCalls: functionCalls.length,
+          functionResponses: functionResponses.length
+        });
+      }
+
+      return result;
     }
 
     // Simple text message
@@ -269,15 +320,31 @@ export class APITranslator {
 
   /**
    * Convert UnifiedRequest to OpenAI chat completion format
+   * @param request The unified request
+   * @param supportsMultimodal Whether the target model supports multimodal content format
    */
-  static unifiedToOpenaiRequest(request: UnifiedRequest): any {
-    const messages = request.messages.map(msg => this.unifiedToOpenaiMessage(msg));
+  static unifiedToOpenaiRequest(request: UnifiedRequest, supportsMultimodal: boolean = true): any {
+    const messages = request.messages.map(msg => this.unifiedToOpenaiMessage(msg, supportsMultimodal));
 
     // Add system message if provided
     if (request.systemMessage) {
       messages.unshift({
         role: 'system',
         content: request.systemMessage
+      });
+    }
+
+    // Debug: Log all messages when multimodal is disabled
+    if (!supportsMultimodal && process.env['DEBUG_MESSAGE_FORMAT']) {
+      console.log('[DEBUG] Converting request with supportsMultimodal=false');
+      messages.forEach((msg, idx) => {
+        console.log(`[DEBUG] Message ${idx}:`, {
+          role: msg.role,
+          contentType: typeof msg.content,
+          isArray: Array.isArray(msg.content),
+          hasToolCalls: !!msg.tool_calls,
+          preview: typeof msg.content === 'string' ? msg.content.substring(0, 50) : 'array'
+        });
       });
     }
 

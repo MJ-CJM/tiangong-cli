@@ -15,6 +15,7 @@ export { CustomAdapter, CustomResponseFormat } from './custom/customAdapter.js';
 
 // Export router and registry
 export { ModelRouter, ModelAdapterRegistry, globalAdapterRegistry } from './modelRouter.js';
+export { AdapterRegistry } from './registry.js';
 
 // Export utilities
 export { APITranslator } from './utils/apiTranslator.js';
@@ -29,7 +30,12 @@ import { CustomAdapter } from './custom/customAdapter.js';
 
 // Register adapters on module load
 // Note: Gemini uses the existing geminiChat.ts implementation, not the adapter pattern
+
+// Old registry (backward compatibility)
 globalAdapterRegistry.register(ModelProvider.OPENAI, OpenAIAdapter);
 globalAdapterRegistry.register(ModelProvider.CLAUDE, ClaudeAdapter);
 globalAdapterRegistry.register(ModelProvider.QWEN, QwenAdapter);
 globalAdapterRegistry.register(ModelProvider.CUSTOM, CustomAdapter);
+
+// New AdapterRegistry is already auto-registered in registry.ts static block
+// AdapterRegistry uses OpenAIAdapter for Qwen, DeepSeek, etc.

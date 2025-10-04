@@ -32,7 +32,7 @@ export enum ErrorCategory {
 export class ModelAdapterError extends Error {
   constructor(
     message: string,
-    public readonly provider: ModelProvider,
+    public readonly provider: ModelProvider | string,
     public readonly category: ErrorCategory = ErrorCategory.UNKNOWN,
     public readonly code?: string,
     public readonly statusCode?: number,
@@ -48,7 +48,7 @@ export class ModelAdapterError extends Error {
  * Error thrown when authentication fails
  */
 export class AuthenticationError extends ModelAdapterError {
-  constructor(provider: ModelProvider, message = 'Authentication failed', originalError?: Error) {
+  constructor(provider: ModelProvider | string, message = 'Authentication failed', originalError?: Error) {
     super(message, provider, ErrorCategory.AUTHENTICATION, 'AUTH_ERROR', 401, originalError, false);
     this.name = 'AuthenticationError';
   }
@@ -58,7 +58,7 @@ export class AuthenticationError extends ModelAdapterError {
  * Error thrown when API quota is exceeded
  */
 export class QuotaExceededError extends ModelAdapterError {
-  constructor(provider: ModelProvider, message = 'API quota exceeded', originalError?: Error) {
+  constructor(provider: ModelProvider | string, message = 'API quota exceeded', originalError?: Error) {
     super(message, provider, ErrorCategory.RATE_LIMIT, 'QUOTA_EXCEEDED', 429, originalError, true);
     this.name = 'QuotaExceededError';
   }
@@ -68,7 +68,7 @@ export class QuotaExceededError extends ModelAdapterError {
  * Error thrown when the requested model is not found
  */
 export class ModelNotFoundError extends ModelAdapterError {
-  constructor(provider: ModelProvider, model: string, originalError?: Error) {
+  constructor(provider: ModelProvider | string, model: string, originalError?: Error) {
     super(`Model ${model} not found for provider ${provider}`, provider, ErrorCategory.MODEL_UNAVAILABLE, 'MODEL_NOT_FOUND', 404, originalError, false);
     this.name = 'ModelNotFoundError';
   }
@@ -78,7 +78,7 @@ export class ModelNotFoundError extends ModelAdapterError {
  * Error thrown when the request is invalid
  */
 export class InvalidRequestError extends ModelAdapterError {
-  constructor(provider: ModelProvider, message: string, originalError?: Error) {
+  constructor(provider: ModelProvider | string, message: string, originalError?: Error) {
     super(message, provider, ErrorCategory.INVALID_INPUT, 'INVALID_REQUEST', 400, originalError, false);
     this.name = 'InvalidRequestError';
   }
@@ -88,7 +88,7 @@ export class InvalidRequestError extends ModelAdapterError {
  * Error thrown when the provider service is unavailable
  */
 export class ServiceUnavailableError extends ModelAdapterError {
-  constructor(provider: ModelProvider, message = 'Service temporarily unavailable', originalError?: Error) {
+  constructor(provider: ModelProvider | string, message = 'Service temporarily unavailable', originalError?: Error) {
     super(message, provider, ErrorCategory.MODEL_UNAVAILABLE, 'SERVICE_UNAVAILABLE', 503, originalError, true);
     this.name = 'ServiceUnavailableError';
   }
@@ -98,7 +98,7 @@ export class ServiceUnavailableError extends ModelAdapterError {
  * Error thrown when content is filtered/blocked
  */
 export class ContentFilterError extends ModelAdapterError {
-  constructor(provider: ModelProvider, message = 'Content was filtered', originalError?: Error) {
+  constructor(provider: ModelProvider | string, message = 'Content was filtered', originalError?: Error) {
     super(message, provider, ErrorCategory.CONTENT_FILTER, 'CONTENT_FILTERED', 400, originalError, false);
     this.name = 'ContentFilterError';
   }
@@ -108,7 +108,7 @@ export class ContentFilterError extends ModelAdapterError {
  * Utility function to map HTTP status codes to appropriate error types
  */
 export function createErrorFromResponse(
-  provider: ModelProvider,
+  provider: ModelProvider | string,
   statusCode: number,
   message: string,
   originalError?: Error

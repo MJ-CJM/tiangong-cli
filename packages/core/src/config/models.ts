@@ -192,14 +192,20 @@ export function getFallbackConfigs(modelConfig: ModelConfig): ModelConfig[] {
         fallbacks.push(DEFAULT_MODEL_CONFIGS['claude-3-5-haiku']);
       }
       break;
+
+    case 'qwen':
+    case 'deepseek':
+      // For Qwen/DeepSeek, no specific fallback within the same provider
+      // They will fall back to cross-provider options below
+      break;
   }
 
-  // Ultimate fallback to Gemini Flash (but not for custom, qwen, or gemini models)
-  // Note: Gemini doesn't have a ModelRouter adapter, so we exclude it from fallback
-  if (modelConfig.provider !== 'gemini' &&
-      modelConfig.provider !== 'custom' &&
-      modelConfig.provider !== 'qwen') {
-    fallbacks.push(DEFAULT_MODEL_CONFIGS[DEFAULT_GEMINI_FLASH_MODEL]);
+  // Cross-provider fallback: try another ModelRouter-compatible model
+  // Note: We don't add Gemini as a fallback because it doesn't have a ModelRouter adapter
+  // Gemini uses the traditional implementation path (geminiChat.ts), not ModelRouter
+  if (modelConfig.provider !== 'openai') {
+    // Fallback to OpenAI gpt-4o-mini if available
+    fallbacks.push(DEFAULT_MODEL_CONFIGS['gpt-4o-mini']);
   }
 
   return fallbacks;
@@ -225,26 +231,66 @@ export function getModelsForProvider(provider: ModelProvider): string[] {
  * Get max output tokens for a model, with provider-specific defaults
  */
 export function getMaxOutputTokens(modelConfig: ModelConfig): number {
-  // If explicitly set, use that value
+  // 1. Highest priority: capabilities.maxOutputTokens
+  if (modelConfig.capabilities?.maxOutputTokens !== undefined) {
+    return modelConfig.capabilities.maxOutputTokens;
+  }
+
+  // 2. Second priority: deprecated maxOutputTokens
   if (modelConfig.maxOutputTokens !== undefined) {
     return modelConfig.maxOutputTokens;
   }
 
-  // Provider-specific defaults
-  switch (modelConfig.provider) {
-    case 'gemini':
-      return 65536;
-    case 'openai':
-      return 16384;
-    case 'claude':
-      return 8192;
-    case 'qwen':
-      // Qwen has a strict limit of 8192
-      return 8192;
-    case 'custom':
-      // Conservative default for custom models
-      return 4096;
-    default:
-      return 4096;
+  // 3. Third priority: options.maxTokens (from config.json)
+  if (modelConfig.options?.['maxTokens'] !== undefined) {
+    return modelConfig.options['maxTokens'];
   }
+
+  // 4. Fourth priority: provider-specific defaults (more specific than adapter type)
+  const providerDefault = getProviderDefaultMaxTokens(modelConfig.provider);
+  if (providerDefault) {
+    return providerDefault;
+  }
+
+  // 5. Final fallback: infer from adapter type
+  const adapterType = modelConfig.adapterType || inferAdapterType(modelConfig.provider);
+
+  const adapterDefaults: Record<string, number> = {
+    'openai': 16384,
+    'claude': 8192,
+    'gemini': 65536,
+    'custom': 4096
+  };
+
+  return adapterDefaults[adapterType] || 4096;
+}
+
+/**
+ * Infer adapter type from provider
+ */
+function inferAdapterType(provider: ModelProvider | string): string {
+  const map: Record<string, string> = {
+    'gemini': 'gemini',
+    'openai': 'openai',
+    'claude': 'claude',
+    'qwen': 'openai',        // Qwen is OpenAI-compatible
+    'deepseek': 'openai',    // DeepSeek is OpenAI-compatible
+    'custom': 'custom'
+  };
+  return map[provider] || 'custom';
+}
+
+/**
+ * Get provider-specific default maxOutputTokens
+ */
+function getProviderDefaultMaxTokens(provider: ModelProvider | string): number {
+  const providerDefaults: Record<string, number> = {
+    'gemini': 65536,
+    'openai': 16384,
+    'claude': 8192,
+    'qwen': 8192,
+    'deepseek': 8192,  // DeepSeek has a limit of 8192
+    'custom': 4096
+  };
+  return providerDefaults[provider] || 4096;
 }

@@ -994,11 +994,16 @@ export class GeminiClient {
         });
       }
 
+      // Get system instruction for all model types
+      const userMemory = this.config.getUserMemory();
+      const systemInstruction = getCoreSystemPrompt(userMemory);
+
       const unifiedRequest: UnifiedRequest = {
         messages: [...historyMessages, userMessage],
         model: actualModelName,
         maxTokens,
         temperature: 0.1,
+        systemMessage: systemInstruction,  // Add system instruction
       };
 
       const tools = this.getUnifiedTools();

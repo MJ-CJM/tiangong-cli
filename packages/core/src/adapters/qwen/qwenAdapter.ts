@@ -87,7 +87,8 @@ export class QwenAdapter extends AbstractModelClient {
    * Generate content using Qwen API
    */
   async generateContent(request: UnifiedRequest): Promise<UnifiedResponse> {
-    const openaiRequest = APITranslator.unifiedToOpenaiRequest(request);
+    const supportsMultimodal = this.config.capabilities?.supportsMultimodal ?? true;
+    const openaiRequest = APITranslator.unifiedToOpenaiRequest(request, supportsMultimodal);
     const response = await this.makeRequest('/chat/completions', openaiRequest);
     return APITranslator.openaiResponseToUnified(response);
   }
@@ -96,8 +97,9 @@ export class QwenAdapter extends AbstractModelClient {
    * Generate content with streaming
    */
   async* generateContentStream(request: UnifiedRequest): AsyncGenerator<any> {
+    const supportsMultimodal = this.config.capabilities?.supportsMultimodal ?? true;
     const openaiRequest = {
-      ...APITranslator.unifiedToOpenaiRequest(request),
+      ...APITranslator.unifiedToOpenaiRequest(request, supportsMultimodal),
       model: this.config.model,
       stream: true
     };

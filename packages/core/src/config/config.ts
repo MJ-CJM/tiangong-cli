@@ -17,6 +17,7 @@ import {
   createContentGenerator,
   createContentGeneratorConfig,
 } from '../core/contentGenerator.js';
+import type { ModelProvider } from '../adapters/base/types.js';
 import { PromptRegistry } from '../prompts/prompt-registry.js';
 import { ToolRegistry } from '../tools/tool-registry.js';
 import { LSTool } from '../tools/ls.js';
@@ -625,13 +626,18 @@ export class Config {
       if (config.models) {
         // Convert config.json format to ModelConfig format
         for (const [modelName, modelDef] of Object.entries(config.models)) {
+          const def = modelDef as any;
+
+          // Copy all fields from config, ensuring we preserve capabilities, adapterType, etc.
           const modelConfig: any = {
-            provider: (modelDef as any).provider || 'custom',
-            model: (modelDef as any).model || modelName,
-            apiKey: (modelDef as any).apiKey || '',
-            baseUrl: (modelDef as any).baseUrl || '',
+            ...def, // Copy all fields from the config
+            provider: def.provider || 'custom',
+            model: def.model || modelName,
             authType: 'api-key', // Set authType for custom models
-            options: (modelDef as any).options || {}
+            // Ensure these exist even if not in config
+            apiKey: def.apiKey || '',
+            baseUrl: def.baseUrl || '',
+            options: def.options || {}
           };
 
           this.customModels[modelName] = modelConfig;
@@ -643,7 +649,7 @@ export class Config {
       if (config.defaultModel && this.customModels[config.defaultModel]) {
         const defaultModelConfig = this.customModels[config.defaultModel];
         this.modelConfig = {
-          provider: defaultModelConfig.provider,
+          provider: defaultModelConfig.provider as ModelProvider,
           model: defaultModelConfig.model
         };
         this.model = config.defaultModel;
@@ -1058,6 +1064,36 @@ export class Config {
     }
 
     const { provider, model } = this.modelConfig;
+
+    // Debug: Log what we're looking for
+    if (process.env['DEBUG_MODEL_REQUESTS']) {
+      console.log('[DEBUG] getModelConfig lookup:', {
+        provider,
+        model,
+        availableCustomModels: Object.keys(this.customModels)
+      });
+    }
+
+    // First, check if there's a full custom model configuration
+    // This preserves capabilities, adapterType, and all other fields
+    const customModelKey = model; // Try model name first
+    if (this.customModels[customModelKey]) {
+      if (process.env['DEBUG_MODEL_REQUESTS']) {
+        console.log('[DEBUG] Found custom model config:', customModelKey);
+      }
+      return this.customModels[customModelKey];
+    }
+
+    // Also try provider:model format
+    const providerModelKey = `${provider}:${model}`;
+    if (this.customModels[providerModelKey]) {
+      if (process.env['DEBUG_MODEL_REQUESTS']) {
+        console.log('[DEBUG] Found custom model config:', providerModelKey);
+      }
+      return this.customModels[providerModelKey];
+    }
+
+    // Fallback: construct basic config from modelProviders
     const providerSettings = this.modelProviders?.[provider];
 
     return {

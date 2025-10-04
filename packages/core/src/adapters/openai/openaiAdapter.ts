@@ -122,8 +122,30 @@ export class OpenAIAdapter extends AbstractModelClient {
    */
   async generateContent(request: UnifiedRequest): Promise<UnifiedResponse> {
     try {
-      const openaiRequest = APITranslator.unifiedToOpenaiRequest(request);
+      // Check if model supports multimodal format (default true for OpenAI)
+      const supportsMultimodal = this.config.capabilities?.supportsMultimodal ?? true;
+
+      if (process.env['DEBUG_MESSAGE_FORMAT']) {
+        console.log('[DEBUG] OpenAIAdapter.generateContent:', {
+          provider: this.config.provider,
+          model: this.config.model,
+          supportsMultimodal,
+          capabilities: this.config.capabilities,
+          messageCount: request.messages.length
+        });
+      }
+
+      const openaiRequest = APITranslator.unifiedToOpenaiRequest(request, supportsMultimodal);
       openaiRequest.model = this.config.model;
+
+      // Debug: Log the system message being sent
+      if (process.env['DEBUG_MODEL_REQUESTS']) {
+        const systemMsg = openaiRequest.messages?.find((m: any) => m.role === 'system');
+        if (systemMsg) {
+          console.log('[DEBUG] System message preview:', systemMsg.content?.substring(0, 200));
+        }
+        console.log('[DEBUG] Sending to:', this.getBaseUrl(), 'Model:', openaiRequest.model);
+      }
 
       const response = await this.makeRequest('/chat/completions', openaiRequest);
 
@@ -146,7 +168,9 @@ export class OpenAIAdapter extends AbstractModelClient {
    */
   async* generateContentStream(request: UnifiedRequest): AsyncGenerator<StreamChunk> {
     try {
-      const openaiRequest = APITranslator.unifiedToOpenaiRequest(request);
+      // Check if model supports multimodal format (default true for OpenAI)
+      const supportsMultimodal = this.config.capabilities?.supportsMultimodal ?? true;
+      const openaiRequest = APITranslator.unifiedToOpenaiRequest(request, supportsMultimodal);
       openaiRequest.model = this.config.model;
       openaiRequest.stream = true;
 

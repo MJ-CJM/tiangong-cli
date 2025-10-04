@@ -11,18 +11,23 @@ export enum ModelProvider {
   GEMINI = 'gemini',
   OPENAI = 'openai',
   CLAUDE = 'claude',
+  QWEN = 'qwen',
   CUSTOM = 'custom'
 }
 
 /**
- * Authentication types for different providers
+ * Authentication types for model adapters
+ * Note: Different from the core AuthType used for Gemini ContentGenerator
  */
-export enum AuthType {
+export enum ModelAuthType {
   API_KEY = 'api-key',
   OAUTH = 'oauth',
   VERTEX_AI = 'vertex-ai',
   CUSTOM_AUTH = 'custom-auth'
 }
+
+// Keep AuthType as an alias for backwards compatibility
+export { ModelAuthType as AuthType };
 
 /**
  * Configuration for a specific model provider
@@ -37,9 +42,11 @@ export interface ModelConfig {
   /** Base URL for API endpoints */
   baseUrl?: string;
   /** Authentication type */
-  authType?: AuthType;
+  authType?: ModelAuthType;
   /** Custom headers for requests */
   customHeaders?: Record<string, string>;
+  /** Maximum output tokens for this model */
+  maxOutputTokens?: number;
   /** Additional provider-specific options */
   options?: Record<string, any>;
 }

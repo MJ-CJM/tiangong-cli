@@ -20,7 +20,8 @@ export type {
 
 export {
   ModelProvider,
-  AuthType,
+  ModelAuthType,
+  AuthType,  // Re-export alias for backwards compatibility
   MessageRole
 } from './types.js';
 
@@ -37,5 +38,6 @@ export {
   InvalidRequestError,
   ServiceUnavailableError,
   ContentFilterError,
+  ErrorCategory,
   createErrorFromResponse
 } from './errors.js';

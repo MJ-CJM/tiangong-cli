@@ -36,9 +36,6 @@ import { ModelService } from '../services/modelService.js';
 import type { UnifiedRequest, ContentPart, ToolDefinition } from '../adapters/base/types.js';
 import { MessageRole } from '../adapters/base/types.js';
 import { APITranslator } from '../adapters/utils/apiTranslator.js';
-import * as path from 'node:path';
-import * as fs from 'node:fs';
-import { homedir } from 'node:os';
 import { isFunctionResponse } from '../utils/messageInspectors.js';
 import { tokenLimit } from './tokenLimits.js';
 import type { ChatRecordingService } from '../services/chatRecordingService.js';
@@ -49,8 +46,11 @@ import {
   DEFAULT_GEMINI_MODEL_AUTO,
   DEFAULT_THINKING_MODE,
   getEffectiveModel,
+  getMaxOutputTokens,
+  getModelConfig,
 } from '../config/models.js';
 import { LoopDetectionService } from '../services/loopDetectionService.js';
+import { logger } from '../utils/logger.js';
 import { ideContextStore } from '../ide/ideContext.js';
 import {
   logChatCompression,
@@ -967,31 +967,37 @@ export class GeminiClient {
       );
       const userMessage = APITranslator.geminiContentToUnified(userContent);
 
-      const modelName = this.config.getModel();
-      console.log('Using model from config.getModel():', modelName);
+      // Get model configuration from the config system
+      const modelConfig = this.config.getModelConfig();
+      let actualModelName: string;
+      let maxTokens: number;
 
-      let actualModelName = modelName;
-      if (modelName === 'auto') {
-        try {
-          const configPath = path.join(homedir(), '.gemini', 'config.json');
-          const configContent = fs.readFileSync(configPath, 'utf8');
-          const config = JSON.parse(configContent);
-          if (config.defaultModel) {
-            actualModelName = config.defaultModel;
-            console.log('Using defaultModel from config.json:', actualModelName);
-          }
-        } catch (error) {
-          console.log(
-            'Could not read config.json, using auto model:',
-            error instanceof Error ? error.message : 'Unknown error',
-          );
-        }
+      if (modelConfig) {
+        // Use ModelRouter configuration (provider:model)
+        actualModelName = modelConfig.model;
+        maxTokens = getMaxOutputTokens(modelConfig);
+        logger.info('Using ModelRouter configuration', {
+          provider: modelConfig.provider,
+          model: modelConfig.model,
+          baseUrl: modelConfig.baseUrl,
+          maxTokens
+        });
+      } else {
+        // Fallback to traditional model configuration
+        actualModelName = this.config.getModel();
+        // Get a temporary model config for determining maxTokens
+        const tempConfig = getModelConfig(actualModelName);
+        maxTokens = getMaxOutputTokens(tempConfig);
+        logger.info('Using traditional model configuration', {
+          model: actualModelName,
+          maxTokens
+        });
       }
 
       const unifiedRequest: UnifiedRequest = {
         messages: [...historyMessages, userMessage],
         model: actualModelName,
-        maxTokens: 65536, // Increased from 1000 to allow for longer responses
+        maxTokens,
         temperature: 0.1,
       };
 
@@ -1109,7 +1115,11 @@ export class GeminiClient {
       };
 
     } catch (error) {
-      console.error('Error in sendMessageStreamWithModelRouter:', error);
+      logger.error('Error in sendMessageStreamWithModelRouter', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
+
       const structuredError: StructuredError = {
         message: getErrorMessage(error as Error),
         status:

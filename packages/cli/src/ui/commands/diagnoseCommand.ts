@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { SlashCommand } from './types.js';
+import type { SlashCommand, CommandContext } from './types.js';
+import { CommandKind } from './types.js';
 import os from 'node:os';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -28,11 +29,12 @@ interface DiagnosticResult {
  */
 export const diagnoseCommand: SlashCommand = {
   name: 'diagnose',
-  description: '检测系统环境、依赖与 API 连接状态',
-  usage: '/diagnose [--json]',
+  description: '检测系统环境、依赖与 API 连接状态 (Usage: /diagnose [--json])',
+  kind: CommandKind.BUILT_IN,
 
-  async execute(args: string[], signal: AbortSignal) {
+  async action(context: CommandContext, args: string) {
     const isJson = args.includes('--json');
+    const signal = new AbortController().signal;
 
     try {
       const diagnostics = await runDiagnostics(signal);
@@ -85,11 +87,11 @@ async function runDiagnostics(
   const envChecks = [
     {
       name: 'GEMINI_API_KEY',
-      status: process.env.GEMINI_API_KEY
+      status: process.env['GEMINI_API_KEY']
         ? ('ok' as const)
         : ('error' as const),
-      value: process.env.GEMINI_API_KEY ? '✓ Set' : '✗ Not found',
-      message: !process.env.GEMINI_API_KEY
+      value: process.env['GEMINI_API_KEY'] ? '✓ Set' : '✗ Not found',
+      message: !process.env['GEMINI_API_KEY']
         ? 'Please set GEMINI_API_KEY environment variable'
         : undefined,
     },
@@ -97,13 +99,13 @@ async function runDiagnostics(
       name: 'GEMINI_BASE_URL',
       status: 'ok' as const,
       value:
-        process.env.GEMINI_BASE_URL ||
+        process.env['GEMINI_BASE_URL'] ||
         'https://generativelanguage.googleapis.com (default)',
     },
     {
       name: 'HTTP_PROXY',
       status: 'ok' as const,
-      value: process.env.HTTP_PROXY || 'Not set',
+      value: process.env['HTTP_PROXY'] || 'Not set',
     },
   ];
 

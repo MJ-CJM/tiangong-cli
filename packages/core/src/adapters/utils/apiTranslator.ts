@@ -383,6 +383,9 @@ export class APITranslator {
     };
   }
 
+  /**
+   * Parse function arguments with robust error handling
+   */
   private static parseFunctionArguments(
     rawArguments?: string,
   ): Record<string, any> {
@@ -402,102 +405,86 @@ export class APITranslator {
           repairError,
         );
 
-        // Try to extract parameters from malformed JSON-like strings
-        const result: Record<string, any> = {};
-
-        // More robust parameter extraction with better regex patterns
-        // Try to extract file_path parameter with various formats
-        const filePathPatterns = [
-          /(?:["']?file_path["']?\s*[:=]\s*["']([^"']*?)["'])/i,
-          /(?:["']?file_path["']?\s*[:=]\s*([^,}\s]+))/i,
-          /(?:file_path["']?\s*[:=]\s*["']?([^"',}]+))/i,
-        ];
-
-        for (const pattern of filePathPatterns) {
-          const match = rawArguments.match(pattern);
-          if (match && match[1] && match[1].trim()) {
-            result['file_path'] = match[1].trim();
-            break;
-          }
-        }
-
-        // Extract content parameter with better handling of multiline content
-        const contentPatterns = [
-          /(?:["']?content["']?\s*[:=]\s*["'])([\s\S]*?)(?:["'](?:\s*[,}]|$))/i,
-          /(?:["']?content["']?\s*[:=]\s*)([\s\S]*?)(?=\s*(?:,\s*["']?\w+["']?\s*[:=]|$|}))/i,
-        ];
-
-        for (const pattern of contentPatterns) {
-          const match = rawArguments.match(pattern);
-          if (match && match[1]) {
-            let content = match[1].trim();
-            // Clean up content - remove trailing quotes or brackets
-            content = content.replace(/["'}]*$/, '').trim();
-            if (content) {
-              result['content'] = content;
-              break;
-            }
-          }
-        }
-
-        // Extract old_string parameter
-        const oldStringPatterns = [
-          /(?:["']?old_string["']?\s*[:=]\s*["'])([\s\S]*?)(?:["'](?:\s*[,}]|$))/i,
-          /(?:["']?old_string["']?\s*[:=]\s*)([\s\S]*?)(?=\s*(?:,\s*["']?\w+["']?\s*[:=]|$|}))/i,
-        ];
-
-        for (const pattern of oldStringPatterns) {
-          const match = rawArguments.match(pattern);
-          if (match && match[1]) {
-            let oldString = match[1].trim();
-            oldString = oldString.replace(/["'}]*$/, '').trim();
-            if (oldString) {
-              result['old_string'] = oldString;
-              break;
-            }
-          }
-        }
-
-        // Extract new_string parameter
-        const newStringPatterns = [
-          /(?:["']?new_string["']?\s*[:=]\s*["'])([\s\S]*?)(?:["'](?:\s*[,}]|$))/i,
-          /(?:["']?new_string["']?\s*[:=]\s*)([\s\S]*?)(?=\s*(?:,\s*["']?\w+["']?\s*[:=]|$|}))/i,
-        ];
-
-        for (const pattern of newStringPatterns) {
-          const match = rawArguments.match(pattern);
-          if (match && match[1]) {
-            let newString = match[1].trim();
-            newString = newString.replace(/["'}]*$/, '').trim();
-            if (newString) {
-              result['new_string'] = newString;
-              break;
-            }
-          }
-        }
-
-        // If we still have no parameters, try a final fallback approach
-        if (Object.keys(result).length === 0) {
-          // Look for any key-value patterns in the string
-          const fallbackPattern = /(\w+)\s*[:=]\s*(.+?)(?=\s*,\s*\w+\s*[:=]|$)/g;
-          let match;
-          while ((match = fallbackPattern.exec(rawArguments)) !== null) {
-            const key = match[1].trim();
-            let value = match[2].trim();
-
-            // Clean up the value
-            value = value.replace(/^["']|["']$/g, '').trim();
-            value = value.replace(/[}]*$/, '').trim();
-
-            if (value && ['file_path', 'content', 'old_string', 'new_string'].includes(key)) {
-              result[key] = value;
-            }
-          }
-        }
-
-        return result;
+        return this.extractParametersFromMalformedJson(rawArguments);
       }
     }
+  }
+
+  /**
+   * Extract parameters from malformed JSON using pattern matching
+   */
+  private static extractParametersFromMalformedJson(raw: string): Record<string, any> {
+    const result: Record<string, any> = {};
+
+    // Define parameter extraction patterns
+    const parameterPatterns: Record<string, RegExp[]> = {
+      file_path: [
+        /(?:["']?file_path["']?\s*[:=]\s*["']([^"']*?)["'])/i,
+        /(?:["']?file_path["']?\s*[:=]\s*([^,}\s]+))/i,
+        /(?:file_path["']?\s*[:=]\s*["']?([^"',}]+))/i,
+      ],
+      content: [
+        /(?:["']?content["']?\s*[:=]\s*["'])([\s\S]*?)(?:["'](?:\s*[,}]|$))/i,
+        /(?:["']?content["']?\s*[:=]\s*)([\s\S]*?)(?=\s*(?:,\s*["']?\w+["']?\s*[:=]|$|}))/i,
+      ],
+      old_string: [
+        /(?:["']?old_string["']?\s*[:=]\s*["'])([\s\S]*?)(?:["'](?:\s*[,}]|$))/i,
+        /(?:["']?old_string["']?\s*[:=]\s*)([\s\S]*?)(?=\s*(?:,\s*["']?\w+["']?\s*[:=]|$|}))/i,
+      ],
+      new_string: [
+        /(?:["']?new_string["']?\s*[:=]\s*["'])([\s\S]*?)(?:["'](?:\s*[,}]|$))/i,
+        /(?:["']?new_string["']?\s*[:=]\s*)([\s\S]*?)(?=\s*(?:,\s*["']?\w+["']?\s*[:=]|$|}))/i,
+      ],
+    };
+
+    // Extract each parameter using its patterns
+    for (const [paramName, patterns] of Object.entries(parameterPatterns)) {
+      for (const pattern of patterns) {
+        const match = raw.match(pattern);
+        if (match && match[1] && match[1].trim()) {
+          let value = match[1].trim();
+          // Clean up value - remove trailing quotes or brackets
+          value = value.replace(/["'}]*$/, '').trim();
+          if (value) {
+            result[paramName] = value;
+            break; // Found this parameter, move to next
+          }
+        }
+      }
+    }
+
+    // Fallback: try generic key-value extraction if nothing found
+    if (Object.keys(result).length === 0) {
+      return this.fallbackParameterExtraction(raw);
+    }
+
+    return result;
+  }
+
+  /**
+   * Final fallback: generic key-value extraction
+   */
+  private static fallbackParameterExtraction(raw: string): Record<string, any> {
+    const result: Record<string, any> = {};
+    const fallbackPattern = /(\w+)\s*[:=]\s*(.+?)(?=\s*,\s*\w+\s*[:=]|$)/g;
+
+    let match;
+    while ((match = fallbackPattern.exec(raw)) !== null) {
+      const key = match[1].trim();
+      let value = match[2].trim();
+
+      // Clean up the value
+      value = value.replace(/^["']|["']$/g, '').trim();
+      value = value.replace(/[}]*$/, '').trim();
+
+      // Only extract known tool parameters
+      const allowedParams = ['file_path', 'content', 'old_string', 'new_string', 'command', 'pattern'];
+      if (value && allowedParams.includes(key)) {
+        result[key] = value;
+      }
+    }
+
+    return result;
   }
 
   private static repairJsonString(raw: string): string {

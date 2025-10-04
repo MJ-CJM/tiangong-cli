@@ -8,9 +8,9 @@
 export * from './base/index.js';
 
 // Export adapters
-export { GeminiAdapter } from './gemini/geminiAdapter.js';
 export { OpenAIAdapter } from './openai/openaiAdapter.js';
 export { ClaudeAdapter } from './claude/claudeAdapter.js';
+export { QwenAdapter } from './qwen/qwenAdapter.js';
 export { CustomAdapter, CustomResponseFormat } from './custom/customAdapter.js';
 
 // Export router and registry
@@ -22,13 +22,14 @@ export { APITranslator } from './utils/apiTranslator.js';
 // Auto-register all adapters
 import { ModelProvider } from './base/index.js';
 import { globalAdapterRegistry } from './modelRouter.js';
-import { GeminiAdapter } from './gemini/geminiAdapter.js';
 import { OpenAIAdapter } from './openai/openaiAdapter.js';
 import { ClaudeAdapter } from './claude/claudeAdapter.js';
+import { QwenAdapter } from './qwen/qwenAdapter.js';
 import { CustomAdapter } from './custom/customAdapter.js';
 
-// Register all adapters on module load
-globalAdapterRegistry.register(ModelProvider.GEMINI, GeminiAdapter);
+// Register adapters on module load
+// Note: Gemini uses the existing geminiChat.ts implementation, not the adapter pattern
 globalAdapterRegistry.register(ModelProvider.OPENAI, OpenAIAdapter);
 globalAdapterRegistry.register(ModelProvider.CLAUDE, ClaudeAdapter);
+globalAdapterRegistry.register(ModelProvider.QWEN, QwenAdapter);
 globalAdapterRegistry.register(ModelProvider.CUSTOM, CustomAdapter);

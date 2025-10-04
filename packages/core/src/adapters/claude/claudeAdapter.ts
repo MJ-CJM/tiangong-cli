@@ -115,7 +115,7 @@ export class ClaudeAdapter extends AbstractModelClient {
             // Claude uses tool_use format
             content.push({
               type: 'tool_use',
-              id: `tool_${Date.now()}`,
+              id: part.functionCall?.id || `tool_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
               name: part.functionCall?.name,
               input: part.functionCall?.args
             });
@@ -124,7 +124,7 @@ export class ClaudeAdapter extends AbstractModelClient {
             // Claude uses tool_result format
             content.push({
               type: 'tool_result',
-              tool_use_id: `tool_${Date.now()}`,
+              tool_use_id: part.functionResponse?.id || `tool_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
               content: JSON.stringify(part.functionResponse?.content)
             });
             break;

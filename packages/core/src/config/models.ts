@@ -20,17 +20,20 @@ export const DEFAULT_MODEL_CONFIGS: Record<string, ModelConfig> = {
   'gemini-2.5-pro': {
     provider: 'gemini' as ModelProvider,
     model: 'gemini-2.5-pro',
-    authType: 'api-key' as AuthType
+    authType: 'api-key' as AuthType,
+    maxOutputTokens: 65536
   },
   'gemini-2.5-flash': {
     provider: 'gemini' as ModelProvider,
     model: 'gemini-2.5-flash',
-    authType: 'api-key' as AuthType
+    authType: 'api-key' as AuthType,
+    maxOutputTokens: 65536
   },
   'gemini-2.5-flash-lite': {
     provider: 'gemini' as ModelProvider,
     model: 'gemini-2.5-flash-lite',
-    authType: 'api-key' as AuthType
+    authType: 'api-key' as AuthType,
+    maxOutputTokens: 65536
   },
 
   // OpenAI models
@@ -38,19 +41,22 @@ export const DEFAULT_MODEL_CONFIGS: Record<string, ModelConfig> = {
     provider: 'openai' as ModelProvider,
     model: 'gpt-4o',
     authType: 'api-key' as AuthType,
-    baseUrl: 'https://api.openai.com/v1'
+    baseUrl: 'https://api.openai.com/v1',
+    maxOutputTokens: 16384
   },
   'gpt-4o-mini': {
     provider: 'openai' as ModelProvider,
     model: 'gpt-4o-mini',
     authType: 'api-key' as AuthType,
-    baseUrl: 'https://api.openai.com/v1'
+    baseUrl: 'https://api.openai.com/v1',
+    maxOutputTokens: 16384
   },
   'gpt-4-turbo': {
     provider: 'openai' as ModelProvider,
     model: 'gpt-4-turbo',
     authType: 'api-key' as AuthType,
-    baseUrl: 'https://api.openai.com/v1'
+    baseUrl: 'https://api.openai.com/v1',
+    maxOutputTokens: 4096
   },
 
   // Claude models
@@ -58,13 +64,15 @@ export const DEFAULT_MODEL_CONFIGS: Record<string, ModelConfig> = {
     provider: 'claude' as ModelProvider,
     model: 'claude-3-5-sonnet-20241022',
     authType: 'api-key' as AuthType,
-    baseUrl: 'https://api.anthropic.com/v1'
+    baseUrl: 'https://api.anthropic.com/v1',
+    maxOutputTokens: 8192
   },
   'claude-3-5-haiku': {
     provider: 'claude' as ModelProvider,
     model: 'claude-3-5-haiku-20241022',
     authType: 'api-key' as AuthType,
-    baseUrl: 'https://api.anthropic.com/v1'
+    baseUrl: 'https://api.anthropic.com/v1',
+    maxOutputTokens: 8192
   }
 };
 
@@ -186,8 +194,11 @@ export function getFallbackConfigs(modelConfig: ModelConfig): ModelConfig[] {
       break;
   }
 
-  // Ultimate fallback to Gemini Flash (but not for custom models)
-  if (modelConfig.provider !== 'gemini' && modelConfig.provider !== 'custom') {
+  // Ultimate fallback to Gemini Flash (but not for custom, qwen, or gemini models)
+  // Note: Gemini doesn't have a ModelRouter adapter, so we exclude it from fallback
+  if (modelConfig.provider !== 'gemini' &&
+      modelConfig.provider !== 'custom' &&
+      modelConfig.provider !== 'qwen') {
     fallbacks.push(DEFAULT_MODEL_CONFIGS[DEFAULT_GEMINI_FLASH_MODEL]);
   }
 
@@ -208,4 +219,32 @@ export function getModelsForProvider(provider: ModelProvider): string[] {
   return Object.entries(DEFAULT_MODEL_CONFIGS)
     .filter(([_, config]) => config.provider === provider)
     .map(([modelName]) => modelName);
+}
+
+/**
+ * Get max output tokens for a model, with provider-specific defaults
+ */
+export function getMaxOutputTokens(modelConfig: ModelConfig): number {
+  // If explicitly set, use that value
+  if (modelConfig.maxOutputTokens !== undefined) {
+    return modelConfig.maxOutputTokens;
+  }
+
+  // Provider-specific defaults
+  switch (modelConfig.provider) {
+    case 'gemini':
+      return 65536;
+    case 'openai':
+      return 16384;
+    case 'claude':
+      return 8192;
+    case 'qwen':
+      // Qwen has a strict limit of 8192
+      return 8192;
+    case 'custom':
+      // Conservative default for custom models
+      return 4096;
+    default:
+      return 4096;
+  }
 }

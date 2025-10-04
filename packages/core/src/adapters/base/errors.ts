@@ -7,15 +7,37 @@
 import type { ModelProvider } from './types.js';
 
 /**
+ * Error categories for better error handling and retry logic
+ */
+export enum ErrorCategory {
+  /** Authentication or authorization failures */
+  AUTHENTICATION = 'auth',
+  /** Rate limiting or quota exceeded */
+  RATE_LIMIT = 'rate_limit',
+  /** Invalid input or malformed request */
+  INVALID_INPUT = 'invalid_input',
+  /** Model or service unavailable */
+  MODEL_UNAVAILABLE = 'model_unavailable',
+  /** Network-related errors */
+  NETWORK = 'network',
+  /** Content filtered or blocked */
+  CONTENT_FILTER = 'content_filter',
+  /** Unknown or unclassified errors */
+  UNKNOWN = 'unknown'
+}
+
+/**
  * Base error class for model adapter errors
  */
 export class ModelAdapterError extends Error {
   constructor(
     message: string,
     public readonly provider: ModelProvider,
+    public readonly category: ErrorCategory = ErrorCategory.UNKNOWN,
     public readonly code?: string,
     public readonly statusCode?: number,
-    public readonly originalError?: Error
+    public readonly originalError?: Error,
+    public readonly retryable: boolean = false
   ) {
     super(message);
     this.name = 'ModelAdapterError';
@@ -27,7 +49,7 @@ export class ModelAdapterError extends Error {
  */
 export class AuthenticationError extends ModelAdapterError {
   constructor(provider: ModelProvider, message = 'Authentication failed', originalError?: Error) {
-    super(message, provider, 'AUTH_ERROR', 401, originalError);
+    super(message, provider, ErrorCategory.AUTHENTICATION, 'AUTH_ERROR', 401, originalError, false);
     this.name = 'AuthenticationError';
   }
 }
@@ -37,7 +59,7 @@ export class AuthenticationError extends ModelAdapterError {
  */
 export class QuotaExceededError extends ModelAdapterError {
   constructor(provider: ModelProvider, message = 'API quota exceeded', originalError?: Error) {
-    super(message, provider, 'QUOTA_EXCEEDED', 429, originalError);
+    super(message, provider, ErrorCategory.RATE_LIMIT, 'QUOTA_EXCEEDED', 429, originalError, true);
     this.name = 'QuotaExceededError';
   }
 }
@@ -47,7 +69,7 @@ export class QuotaExceededError extends ModelAdapterError {
  */
 export class ModelNotFoundError extends ModelAdapterError {
   constructor(provider: ModelProvider, model: string, originalError?: Error) {
-    super(`Model ${model} not found for provider ${provider}`, provider, 'MODEL_NOT_FOUND', 404, originalError);
+    super(`Model ${model} not found for provider ${provider}`, provider, ErrorCategory.MODEL_UNAVAILABLE, 'MODEL_NOT_FOUND', 404, originalError, false);
     this.name = 'ModelNotFoundError';
   }
 }
@@ -57,7 +79,7 @@ export class ModelNotFoundError extends ModelAdapterError {
  */
 export class InvalidRequestError extends ModelAdapterError {
   constructor(provider: ModelProvider, message: string, originalError?: Error) {
-    super(message, provider, 'INVALID_REQUEST', 400, originalError);
+    super(message, provider, ErrorCategory.INVALID_INPUT, 'INVALID_REQUEST', 400, originalError, false);
     this.name = 'InvalidRequestError';
   }
 }
@@ -67,7 +89,7 @@ export class InvalidRequestError extends ModelAdapterError {
  */
 export class ServiceUnavailableError extends ModelAdapterError {
   constructor(provider: ModelProvider, message = 'Service temporarily unavailable', originalError?: Error) {
-    super(message, provider, 'SERVICE_UNAVAILABLE', 503, originalError);
+    super(message, provider, ErrorCategory.MODEL_UNAVAILABLE, 'SERVICE_UNAVAILABLE', 503, originalError, true);
     this.name = 'ServiceUnavailableError';
   }
 }
@@ -77,7 +99,7 @@ export class ServiceUnavailableError extends ModelAdapterError {
  */
 export class ContentFilterError extends ModelAdapterError {
   constructor(provider: ModelProvider, message = 'Content was filtered', originalError?: Error) {
-    super(message, provider, 'CONTENT_FILTERED', 400, originalError);
+    super(message, provider, ErrorCategory.CONTENT_FILTER, 'CONTENT_FILTERED', 400, originalError, false);
     this.name = 'ContentFilterError';
   }
 }
@@ -109,6 +131,6 @@ export function createErrorFromResponse(
     case 504:
       return new ServiceUnavailableError(provider, message, originalError);
     default:
-      return new ModelAdapterError(message, provider, 'UNKNOWN_ERROR', statusCode, originalError);
+      return new ModelAdapterError(message, provider, ErrorCategory.UNKNOWN, 'UNKNOWN_ERROR', statusCode, originalError, false);
   }
 }

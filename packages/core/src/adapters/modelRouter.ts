@@ -17,8 +17,11 @@ import type {
 
 import {
   ModelAdapterError,
-  ModelNotFoundError
+  ModelNotFoundError,
+  ErrorCategory
 } from './base/index.js';
+
+import { logger } from '../utils/logger.js';
 
 /**
  * Registry for model adapters
@@ -81,30 +84,52 @@ export class ModelRouter {
    */
   private async getAdapter(config: ModelConfig): Promise<BaseModelClient> {
     const key = this.getAdapterKey(config);
-    console.log(`Getting adapter for config:`, config);
+
+    logger.debug('Getting adapter', {
+      provider: config.provider,
+      model: config.model,
+      cached: this.adapters.has(key)
+    });
 
     if (!this.adapters.has(key)) {
-      console.log(`Creating new adapter for ${config.provider}:${config.model}`);
+      logger.info('Creating new adapter', {
+        provider: config.provider,
+        model: config.model
+      });
+
       const adapter = this.registry.createAdapter(config);
 
       // Validate the adapter can make requests
       try {
         await adapter.validate();
-        console.log(`Adapter validation successful for ${config.provider}:${config.model}`);
+        logger.info('Adapter validation successful', {
+          provider: config.provider,
+          model: config.model
+        });
       } catch (error) {
-        console.log(`Adapter validation failed for ${config.provider}:${config.model}:`, error);
+        logger.error('Adapter validation failed', {
+          provider: config.provider,
+          model: config.model,
+          error: error instanceof Error ? error.message : String(error)
+        });
+
         throw new ModelAdapterError(
           `Failed to validate adapter for ${config.provider}:${config.model}`,
           config.provider,
+          ErrorCategory.UNKNOWN,
           'VALIDATION_ERROR',
           undefined,
-          error as Error
+          error as Error,
+          false
         );
       }
 
       this.adapters.set(key, adapter);
     } else {
-      console.log(`Using cached adapter for ${config.provider}:${config.model}`);
+      logger.debug('Using cached adapter', {
+        provider: config.provider,
+        model: config.model
+      });
     }
 
     return this.adapters.get(key)!;
@@ -118,38 +143,96 @@ export class ModelRouter {
   }
 
   /**
-   * Route a request to the appropriate adapter with fallback support
+   * Route a request to the appropriate adapter with fallback support and smart retry
    */
   async generateContent(config: ModelConfig, request: UnifiedRequest): Promise<UnifiedResponse> {
-    const errors: Error[] = [];
+    const allConfigs = [
+      { config, priority: 0, retryCount: 1 },
+      ...this.fallbackConfigs.map((c, i) => ({ config: c, priority: i + 1, retryCount: 2 }))
+    ];
 
-    // Try primary configuration
-    try {
-      const adapter = await this.getAdapter(config);
-      return await adapter.generateContent(request);
-    } catch (error) {
-      console.log(`Primary adapter failed for ${config.provider}:${config.model}:`, error);
-      errors.push(error as Error);
-    }
+    const errors: Array<{ config: ModelConfig; error: ModelAdapterError; attempt: number }> = [];
 
-    // Try fallback configurations
-    for (const fallbackConfig of this.fallbackConfigs) {
-      try {
-        const adapter = await this.getAdapter(fallbackConfig);
-        return await adapter.generateContent(request);
-      } catch (error) {
-        errors.push(error as Error);
+    for (const { config: attemptConfig, retryCount } of allConfigs) {
+      for (let attempt = 0; attempt < retryCount; attempt++) {
+        try {
+          const adapter = await this.getAdapter(attemptConfig);
+          const response = await adapter.generateContent(request);
+
+          // Log success if fallback was used
+          if (errors.length > 0) {
+            logger.warn('Request succeeded after fallback', {
+              primary: config.provider,
+              successful: attemptConfig.provider,
+              failedAttempts: errors.length
+            });
+          }
+
+          return response;
+        } catch (error) {
+          const err = error as ModelAdapterError;
+
+          logger.warn('Adapter request failed', {
+            provider: attemptConfig.provider,
+            model: attemptConfig.model,
+            attempt: attempt + 1,
+            maxAttempts: retryCount,
+            category: err.category,
+            retryable: err.retryable,
+            error: err.message
+          });
+
+          // Non-retryable errors: skip to next fallback immediately
+          if (!err.retryable) {
+            logger.error('Non-retryable error encountered', {
+              provider: attemptConfig.provider,
+              category: err.category,
+              code: err.code
+            });
+            errors.push({ config: attemptConfig, error: err, attempt: attempt + 1 });
+            break; // Skip remaining retries for this config
+          }
+
+          // Retryable errors: wait and retry if attempts remain
+          if (attempt < retryCount - 1) {
+            const delay = Math.min(1000 * Math.pow(2, attempt), 10000);
+            logger.info(`Retrying after delay`, {
+              provider: attemptConfig.provider,
+              delayMs: delay,
+              attempt: attempt + 1,
+              maxAttempts: retryCount
+            });
+
+            await this.sleep(delay);
+            continue;
+          }
+
+          errors.push({ config: attemptConfig, error: err, attempt: attempt + 1 });
+        }
       }
     }
 
-    // If all attempts failed, throw the original error
+    // All attempts failed
+    const errorSummary = errors.map(e =>
+      `${e.config.provider}:${e.config.model} (${e.error.category}): ${e.error.message}`
+    ).join('; ');
+
     throw new ModelAdapterError(
-      `All model requests failed. Errors: ${errors.map(e => e.message).join(', ')}`,
+      `All model requests failed. Errors: ${errorSummary}`,
       config.provider,
+      ErrorCategory.UNKNOWN,
       'ALL_REQUESTS_FAILED',
       undefined,
-      errors[0]
+      errors[0]?.error,
+      false
     );
+  }
+
+  /**
+   * Helper: sleep for specified milliseconds
+   */
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   /**
@@ -164,9 +247,11 @@ export class ModelRouter {
       throw new ModelAdapterError(
         `Streaming request failed: ${(error as Error).message}`,
         config.provider,
+        ErrorCategory.UNKNOWN,
         'STREAMING_FAILED',
         undefined,
-        error as Error
+        error as Error,
+        false
       );
     }
   }
@@ -182,9 +267,11 @@ export class ModelRouter {
       throw new ModelAdapterError(
         `Token counting failed: ${(error as Error).message}`,
         config.provider,
+        ErrorCategory.UNKNOWN,
         'TOKEN_COUNT_FAILED',
         undefined,
-        error as Error
+        error as Error,
+        false
       );
     }
   }
@@ -203,9 +290,11 @@ export class ModelRouter {
       throw new ModelAdapterError(
         `Embedding generation failed: ${(error as Error).message}`,
         config.provider,
+        ErrorCategory.UNKNOWN,
         'EMBEDDING_FAILED',
         undefined,
-        error as Error
+        error as Error,
+        false
       );
     }
   }
@@ -224,9 +313,11 @@ export class ModelRouter {
       throw new ModelAdapterError(
         `Failed to get available models: ${(error as Error).message}`,
         config.provider,
+        ErrorCategory.UNKNOWN,
         'MODEL_DISCOVERY_FAILED',
         undefined,
-        error as Error
+        error as Error,
+        false
       );
     }
   }

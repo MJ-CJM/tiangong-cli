@@ -104,17 +104,16 @@ export class OpenAIAdapter extends AbstractModelClient {
    */
   override async validate(): Promise<boolean> {
     try {
-      // Try to list models to validate the API key
-      await this.makeRequest('/models', {}, {});
+      // Simple validation: check if API key exists
+      // Actual validation will happen on first request
+      this.getApiKey();
       return true;
     } catch (error) {
-      const err = error as any;
-
-      if (err.statusCode === 401 || err.statusCode === 403) {
-        throw new AuthenticationError(this.config.provider, 'Invalid API key or insufficient permissions', err);
-      }
-
-      throw new ServiceUnavailableError(this.config.provider, `Failed to validate OpenAI configuration: ${err.message}`, err);
+      throw new AuthenticationError(
+        this.config.provider,
+        'No API key found for OpenAI. Set OPENAI_API_KEY environment variable.',
+        error as Error
+      );
     }
   }
 

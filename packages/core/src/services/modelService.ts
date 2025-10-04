@@ -18,7 +18,7 @@ import {
   ModelRouter,
   globalAdapterRegistry,
   ModelProvider,
-  AuthType
+  ModelAuthType
 } from '../adapters/index.js';
 
 import {
@@ -63,7 +63,7 @@ export class ModelService {
         provider: ModelProvider.OPENAI,
         model: 'gpt-4o',
         apiKey: process.env['OPENAI_API_KEY'],
-        authType: AuthType.API_KEY,
+        authType: ModelAuthType.API_KEY,
         baseUrl: process.env['OPENAI_BASE_URL'] || 'https://api.openai.com/v1'
       };
       this.customModelConfigs['openai:default'] = openaiConfig;
@@ -76,10 +76,23 @@ export class ModelService {
         provider: ModelProvider.CLAUDE,
         model: 'claude-3-5-sonnet-20241022',
         apiKey: claudeKey,
-        authType: AuthType.API_KEY,
+        authType: ModelAuthType.API_KEY,
         baseUrl: process.env['CLAUDE_BASE_URL'] || 'https://api.anthropic.com/v1'
       };
       this.customModelConfigs['claude:default'] = claudeConfig;
+    }
+
+    // Qwen configuration
+    const qwenKey = process.env['QWEN_CODER_API_KEY'] || process.env['QWEN_API_KEY'];
+    if (qwenKey) {
+      const qwenConfig: ModelConfig = {
+        provider: ModelProvider.QWEN,
+        model: 'qwen-coder-turbo',
+        apiKey: qwenKey,
+        authType: ModelAuthType.API_KEY,
+        baseUrl: process.env['QWEN_BASE_URL'] || 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+      };
+      this.customModelConfigs['qwen:default'] = qwenConfig;
     }
 
     // Custom/local model configuration
@@ -88,7 +101,7 @@ export class ModelService {
         provider: ModelProvider.CUSTOM,
         model: process.env['CUSTOM_MODEL_NAME'] || 'custom-model',
         apiKey: process.env['CUSTOM_API_KEY'],
-        authType: AuthType.API_KEY,
+        authType: ModelAuthType.API_KEY,
         baseUrl: process.env['CUSTOM_MODEL_URL'],
         options: {
           responseFormat: process.env['CUSTOM_RESPONSE_FORMAT'] || 'openai'

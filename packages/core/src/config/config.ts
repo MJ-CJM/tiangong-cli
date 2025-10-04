@@ -113,6 +113,35 @@ export interface OutputSettings {
   format?: OutputFormat;
 }
 
+/**
+ * Model provider configuration
+ */
+export interface ModelProviderConfig {
+  apiKey?: string;
+  baseUrl?: string;
+  timeout?: number;
+  retries?: number;
+}
+
+/**
+ * Model providers settings
+ */
+export interface ModelProvidersSettings {
+  gemini?: ModelProviderConfig;
+  openai?: ModelProviderConfig;
+  claude?: ModelProviderConfig;
+  qwen?: ModelProviderConfig;
+  custom?: ModelProviderConfig;
+}
+
+/**
+ * Active model configuration
+ */
+export interface ActiveModelConfig {
+  provider: 'gemini' | 'openai' | 'claude' | 'qwen' | 'custom';
+  model: string;
+}
+
 export interface GeminiCLIExtension {
   name: string;
   version: string;
@@ -244,6 +273,8 @@ export interface ConfigParameters {
   policyEngineConfig?: PolicyEngineConfig;
   output?: OutputSettings;
   useModelRouter?: boolean;
+  modelConfig?: ActiveModelConfig;
+  modelProviders?: ModelProvidersSettings;
 }
 
 export class Config {
@@ -333,6 +364,8 @@ export class Config {
   private readonly policyEngine: PolicyEngine;
   private readonly outputSettings: OutputSettings;
   private readonly useModelRouter: boolean;
+  private modelConfig: ActiveModelConfig | undefined;
+  private modelProviders: ModelProvidersSettings;
 
   constructor(params: ConfigParameters) {
     this.sessionId = params.sessionId;
@@ -418,6 +451,8 @@ export class Config {
       params.enableToolOutputTruncation ?? false;
     this.useSmartEdit = params.useSmartEdit ?? true;
     this.useModelRouter = params.useModelRouter ?? false;
+    this.modelConfig = params.modelConfig;
+    this.modelProviders = params.modelProviders ?? {};
     this.extensionManagement = params.extensionManagement ?? true;
     this.storage = new Storage(this.targetDir);
     this.enablePromptCompletion = params.enablePromptCompletion ?? false;
@@ -595,12 +630,24 @@ export class Config {
             model: (modelDef as any).model || modelName,
             apiKey: (modelDef as any).apiKey || '',
             baseUrl: (modelDef as any).baseUrl || '',
+            authType: 'api-key', // Set authType for custom models
             options: (modelDef as any).options || {}
           };
 
           this.customModels[modelName] = modelConfig;
         }
         console.log(`Loaded ${Object.keys(config.models).length} custom model configurations`);
+      }
+
+      // Set default model if specified and exists in custom models
+      if (config.defaultModel && this.customModels[config.defaultModel]) {
+        const defaultModelConfig = this.customModels[config.defaultModel];
+        this.modelConfig = {
+          provider: defaultModelConfig.provider,
+          model: defaultModelConfig.model
+        };
+        this.model = config.defaultModel;
+        console.log(`Set default model to: ${config.defaultModel}`);
       }
     } catch (error) {
       console.log('Could not load custom model configurations:', error instanceof Error ? error.message : 'Unknown error');
@@ -1000,6 +1047,48 @@ export class Config {
 
   getUseModelRouter(): boolean {
     return this.useModelRouter;
+  }
+
+  /**
+   * Get the current model configuration for ModelRouter
+   */
+  getModelConfig(): import('../adapters/base/types.js').ModelConfig | null {
+    if (!this.useModelRouter || !this.modelConfig) {
+      return null;
+    }
+
+    const { provider, model } = this.modelConfig;
+    const providerSettings = this.modelProviders?.[provider];
+
+    return {
+      provider: provider as import('../adapters/base/types.js').ModelProvider,
+      model,
+      apiKey: providerSettings?.apiKey,
+      baseUrl: providerSettings?.baseUrl,
+      options: {
+        timeout: providerSettings?.timeout,
+        retries: providerSettings?.retries
+      }
+    };
+  }
+
+  /**
+   * Set the active model configuration
+   */
+  setModelConfig(config: ActiveModelConfig): void {
+    if (!this.useModelRouter) {
+      throw new Error('ModelRouter is not enabled. Set useModelRouter: true in settings.');
+    }
+
+    this.modelConfig = config;
+    // TODO: Persist to user settings file
+  }
+
+  /**
+   * Get all configured model providers
+   */
+  getModelProviders(): ModelProvidersSettings {
+    return this.modelProviders || {};
   }
 
   async getGitService(): Promise<GitService> {

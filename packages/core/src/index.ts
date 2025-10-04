@@ -9,6 +9,50 @@ export * from './config/config.js';
 export * from './output/types.js';
 export * from './output/json-formatter.js';
 
+// Export model adapters and router (selective exports to avoid AuthType conflict)
+export {
+  // Base types
+  ModelProvider,
+  ModelAuthType,  // Export as ModelAuthType to avoid conflict with contentGenerator's AuthType
+  MessageRole,
+  ErrorCategory,
+  // Errors
+  ModelAdapterError,
+  AuthenticationError,
+  QuotaExceededError,
+  ModelNotFoundError,
+  InvalidRequestError,
+  ServiceUnavailableError,
+  ContentFilterError,
+  createErrorFromResponse,
+  // Adapters
+  OpenAIAdapter,
+  ClaudeAdapter,
+  QwenAdapter,
+  CustomAdapter,
+  CustomResponseFormat,
+  // Router and registry
+  ModelRouter,
+  ModelAdapterRegistry,
+  globalAdapterRegistry,
+  // Utils
+  APITranslator,
+} from './adapters/index.js';
+
+export type {
+  ModelConfig,
+  UnifiedRequest,
+  UnifiedResponse,
+  UnifiedMessage,
+  ContentPart,
+  ToolDefinition,
+  TokenUsage,
+  TokenCountResponse,
+  EmbeddingResponse,
+  StreamChunk,
+  BaseModelClient,
+} from './adapters/index.js';
+
 // Export Core Logic
 export * from './core/client.js';
 export * from './core/contentGenerator.js';

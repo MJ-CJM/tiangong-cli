@@ -1,11 +1,15 @@
 # 通用模型支持方案设计文档
 
+## 状态：✅ 已实现并验证
+
+本文档描述了 Gemini CLI 的通用模型支持架构，已在生产环境中成功运行。
+
 ## 1. 设计目标
 
-- **零代码添加新模型**：通过配置文件即可支持新模型，无需修改代码
-- **适配器复用**：OpenAI 兼容的模型（Qwen、DeepSeek 等）共用适配器
-- **灵活配置**：支持模型特定的参数限制和特性
-- **向后兼容**：不影响现有 Gemini、OpenAI、Claude 等模型
+- ✅ **零代码添加新模型**：通过配置文件即可支持新模型，无需修改代码
+- ✅ **适配器复用**：OpenAI 兼容的模型（Qwen、DeepSeek 等）共用适配器
+- ✅ **灵活配置**：支持模型特定的参数限制和特性（包括 `supportsMultimodal`）
+- ✅ **向后兼容**：不影响现有 Gemini、OpenAI、Claude 等模型
 
 ## 2. 架构设计
 
@@ -26,7 +30,8 @@
         "maxOutputTokens": 8192,
         "supportsStreaming": true,
         "supportsFunctionCalling": true,
-        "supportsVision": false
+        "supportsVision": false,
+        "supportsMultimodal": true
       },
       "options": {
         "temperature": 0.1,
@@ -34,7 +39,7 @@
       }
     },
     "deepseek-coder": {
-      "provider": "openai-compatible",
+      "provider": "deepseek",
       "adapterType": "openai",
       "model": "deepseek-coder",
       "apiKey": "sk-xxx",
@@ -43,7 +48,8 @@
         "maxInputTokens": 16384,
         "maxOutputTokens": 4096,
         "supportsStreaming": true,
-        "supportsFunctionCalling": true
+        "supportsFunctionCalling": true,
+        "supportsMultimodal": false  // DeepSeek 不支持数组格式的消息
       }
     }
   }
@@ -84,6 +90,8 @@ export interface ModelCapabilities {
   supportsVision?: boolean;
   /** 是否支持工具调用 */
   supportsTools?: boolean;
+  /** 是否支持 OpenAI multimodal 消息格式（content 为数组）*/
+  supportsMultimodal?: boolean;
 }
 
 export interface ModelConfig {
@@ -312,18 +320,96 @@ function inferAdapterType(provider: string): string {
 - 将 Qwen、DeepSeek 等迁移到使用 OpenAIAdapter
 - 清理冗余代码
 
-## 7. 测试计划
+## 7. 测试结果
 
-- [ ] 测试 Qwen 使用 OpenAI 适配器
-- [ ] 测试 DeepSeek 使用 OpenAI 适配器
-- [ ] 测试自定义模型配置
-- [ ] 测试 maxOutputTokens 限制
-- [ ] 测试向后兼容性
+- ✅ Qwen 使用 OpenAI 适配器正常工作
+- ✅ DeepSeek 使用 OpenAI 适配器正常工作（需要 `supportsMultimodal: false`）
+- ✅ 自定义模型配置支持完整字段
+- ✅ maxOutputTokens 限制正确应用
+- ✅ 向后兼容性保持完好
+- ✅ `supportsMultimodal` 标志正确控制消息格式转换
 
-## 8. 文档更新
+## 8. 关键实现细节
 
-需要更新以下文档：
-- [ ] 用户指南：如何添加新模型
-- [ ] 配置参考：所有配置选项说明
-- [ ] 开发者指南：如何创建新适配器
-- [ ] 示例配置：常见模型配置模板
+### 8.1 配置加载优化
+
+**问题**：初始实现中 `Config.loadCustomModelConfigs()` 只复制了部分字段，导致 `capabilities` 丢失。
+
+**解决方案**（`packages/core/src/config/config.ts:626-644`）：
+```typescript
+// 使用展开运算符复制所有字段
+const modelConfig: any = {
+  ...def, // 复制所有字段，包括 capabilities
+  provider: def.provider || 'custom',
+  model: def.model || modelName,
+  authType: 'api-key',
+  apiKey: def.apiKey || '',
+  baseUrl: def.baseUrl || '',
+  options: def.options || {}
+};
+```
+
+### 8.2 配置查找优化
+
+**问题**：`Config.getModelConfig()` 重新构建配置对象，丢失了完整的配置信息。
+
+**解决方案**（`packages/core/src/config/config.ts:1056-1104`）：
+```typescript
+// 优先从 customModels 获取完整配置
+if (this.customModels[model]) {
+  return this.customModels[model];
+}
+
+// 回退到基本配置构建
+const providerSettings = this.modelProviders?.[provider];
+return {
+  provider,
+  model,
+  apiKey: providerSettings?.apiKey,
+  baseUrl: providerSettings?.baseUrl,
+  // ...
+};
+```
+
+### 8.3 消息格式转换
+
+**关键逻辑**（`packages/core/src/adapters/utils/apiTranslator.ts:234-271`）：
+
+```typescript
+// 当模型不支持 multimodal 格式时，将数组转为字符串
+if (!supportsMultimodal) {
+  const combinedText = textParts.map(part => part.text || '').join('\n').trim();
+
+  return {
+    role,
+    content: combinedText || '',
+    tool_calls: /* ... */
+  };
+}
+```
+
+这确保了像 DeepSeek 这样不支持 `content: [{ type: 'text', text: '...' }]` 格式的模型，能够接收 `content: "..."` 字符串格式。
+
+## 9. 已知限制和注意事项
+
+1. **supportsMultimodal**:
+   - 默认为 `true`（OpenAI 标准）
+   - DeepSeek 等部分模型必须设置为 `false`
+   - 影响消息 content 的格式（数组 vs 字符串）
+
+2. **配置键名匹配**:
+   - `customModels` 使用配置文件中的键名存储
+   - `getModelConfig()` 按 `model` 名称查找
+   - 确保配置键名与 `model` 字段一致
+
+3. **Provider 规范化**:
+   - `AdapterRegistry.normalizeConfig()` 会修改 `provider` 字段
+   - 例如 `provider: "deepseek"` → `provider: "openai"`（内部使用）
+   - 但完整配置通过浅拷贝保留所有字段
+
+## 10. 文档
+
+- ✅ [用户指南：如何添加新模型](./docs/ADD_NEW_MODEL.md)
+- ✅ 配置参考：所有配置选项说明（本文档）
+- ✅ 示例配置：常见模型配置模板（见用户指南）
+- 📝 开发者指南：如何创建新适配器（待完善）

@@ -47,6 +47,7 @@ import { StreamingState, MessageType, ToolCallStatus } from '../types.js';
 import { isAtCommand, isSlashCommand } from '../utils/commandUtils.js';
 import { useShellCommandProcessor } from './shellCommandProcessor.js';
 import { handleAtCommand } from './atCommandProcessor.js';
+import { detectAgentCommand, isAgentCommand } from './agentCommandProcessor.js';
 import { findLastSafeSplitPoint } from '../utils/markdownUtilities.js';
 import { useStateAndRef } from './useStateAndRef.js';
 import type { UseHistoryManagerReturn } from './useHistoryManager.js';
@@ -360,6 +361,32 @@ export const useGeminiStream = (
 
         if (shellModeActive && handleShellCommand(trimmedQuery, abortSignal)) {
           return { queryToSend: null, shouldProceed: false };
+        }
+
+        // Handle agent commands (natural language agent invocation)
+        if (isAgentCommand(trimmedQuery)) {
+          onDebugMessage(`[AGENT] Detected agent command pattern: ${trimmedQuery}`);
+          const agentMatch = detectAgentCommand(trimmedQuery);
+          if (agentMatch) {
+            onDebugMessage(`[AGENT] Matched agent: ${agentMatch.agentName}, prompt: ${agentMatch.prompt}`);
+
+            // Show user's original query
+            addItem(
+              { type: MessageType.USER, text: trimmedQuery },
+              userMessageTimestamp,
+            );
+
+            // Execute agent command by invoking the slash command
+            const agentCommand = `/agents run ${agentMatch.agentName} ${agentMatch.prompt}`;
+            onDebugMessage(`[AGENT] Executing: ${agentCommand}`);
+
+            // Process as slash command (same pattern as regular slash commands)
+            await handleSlashCommand(agentCommand);
+
+            // The /agents run command returns 'handled' type
+            // We're done processing after executing the agent command
+            return { queryToSend: null, shouldProceed: false };
+          }
         }
 
         // Handle @-commands (which might involve tool calls)

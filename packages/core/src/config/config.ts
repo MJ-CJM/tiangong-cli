@@ -20,6 +20,7 @@ import {
 import type { ModelProvider } from '../adapters/base/types.js';
 import { PromptRegistry } from '../prompts/prompt-registry.js';
 import { ToolRegistry } from '../tools/tool-registry.js';
+import { AgentExecutor } from '../agents/AgentExecutor.js';
 import { LSTool } from '../tools/ls.js';
 import { ReadFileTool } from '../tools/read-file.js';
 import { GrepTool } from '../tools/grep.js';
@@ -281,6 +282,7 @@ export interface ConfigParameters {
 export class Config {
   private toolRegistry!: ToolRegistry;
   private promptRegistry!: PromptRegistry;
+  private agentExecutor: AgentExecutor | null = null;
   private readonly sessionId: string;
   private fileSystemService: FileSystemService;
   private contentGeneratorConfig!: ContentGeneratorConfig;
@@ -717,6 +719,55 @@ export class Config {
 
   getPromptRegistry(): PromptRegistry {
     return this.promptRegistry;
+  }
+
+  /**
+   * Get or create the global AgentExecutor instance
+   *
+   * This ensures agent contexts are preserved across multiple invocations
+   * within the same CLI session.
+   */
+  async getAgentExecutor(): Promise<AgentExecutor> {
+    if (!this.agentExecutor) {
+      // Import ModelService dynamically to avoid circular dependency
+      const { ModelService } = await import('../services/modelService.js');
+      const modelService = new ModelService(this);
+
+      this.agentExecutor = new AgentExecutor(
+        this,
+        modelService,
+        this.toolRegistry,
+        null as any // MCP client manager will be integrated in future
+      );
+
+      await this.agentExecutor.initialize();
+    }
+
+    return this.agentExecutor;
+  }
+
+  /**
+   * Sync main session conversation history to agent context manager
+   *
+   * This enables agents with shared context mode to access the main conversation.
+   *
+   * @param history - Main session conversation history in Gemini Content format
+   */
+  async syncMainSessionContext(history: any[]): Promise<void> {
+    if (!this.agentExecutor) {
+      // Initialize executor if not already done
+      await this.getAgentExecutor();
+    }
+
+    // Import converter
+    const { convertGeminiToUnifiedMessages } = await import(
+      '../agents/messageConverter.js'
+    );
+
+    // Convert and set main session context
+    const unifiedMessages = convertGeminiToUnifiedMessages(history);
+    const contextManager = this.agentExecutor!.getContextManager();
+    contextManager.setMainSessionContext(unifiedMessages);
   }
 
   getDebugMode(): boolean {

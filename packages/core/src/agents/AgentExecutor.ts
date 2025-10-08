@@ -425,6 +425,11 @@ export class AgentExecutor {
       `[AgentExecutor] Executing handoff: ${handoffContext.from_agent} -> ${agentName}`
     );
 
+    // Notify about handoff via callback
+    if (options.onHandoff) {
+      options.onHandoff(handoffContext.from_agent, agentName, handoffContext.reason);
+    }
+
     // Build prompt with handoff context
     const handoffPrompt = this.buildHandoffPrompt(handoffContext);
 

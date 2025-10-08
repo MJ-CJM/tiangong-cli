@@ -22,7 +22,18 @@ export type {
   AgentCreateOptions,
   AgentListItem,
   AgentFrontMatter,
+  RoutingConfig,
+  RoutingScore,
+  HandoffConfig,
+  HandoffContext,
+  WorkflowDefinition,
+  WorkflowStep,
+  WorkflowContext,
+  WorkflowStepResult,
+  WorkflowExecutionResult,
+  WorkflowListItem,
 } from './types.js';
+export { HandoffError, WorkflowError } from './types.js';
 
 // Core classes
 export { AgentParser } from './AgentParser.js';
@@ -36,6 +47,17 @@ export { AgentContentGenerator } from './AgentContentGenerator.js';
 export { AgentCreationSession, CreationStep } from './AgentCreationSession.js';
 export type { GeneratedAgentContent } from './AgentContentGenerator.js';
 export type { AgentCreationState } from './AgentCreationSession.js';
+
+// P2: Routing and Handoff (Phase 1)
+export { Router } from './Router.js';
+export { RuleRouter } from './RuleRouter.js';
+export { LLMRouter } from './LLMRouter.js';
+export { HybridRouter } from './HybridRouter.js';
+export { HandoffManager } from './HandoffManager.js';
+
+// P2: Workflows (Phase 2)
+export { WorkflowManager } from './WorkflowManager.js';
+export { WorkflowExecutor } from './WorkflowExecutor.js';
 
 // Tool Categories
 export {

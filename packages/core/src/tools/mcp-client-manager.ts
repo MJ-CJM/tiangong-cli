@@ -56,9 +56,12 @@ export class McpClientManager {
    * them with the `ToolRegistry`.
    */
   async discoverAllMcpTools(cliConfig: Config): Promise<void> {
+    console.log(`[McpClientManager] Checking if folder is trusted...`);
     if (!cliConfig.isTrustedFolder()) {
+      console.log(`[McpClientManager] Folder is NOT trusted - MCP tools will NOT be discovered`);
       return;
     }
+    console.log(`[McpClientManager] Folder is trusted - discovering MCP tools from ${Object.keys(this.mcpServers || {}).length} servers`);
     await this.stop();
 
     const servers = populateMcpServerCommand(

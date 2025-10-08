@@ -191,13 +191,18 @@ export class ToolRegistry {
   registerTool(tool: AnyDeclarativeTool): void {
     if (this.tools.has(tool.name)) {
       if (tool instanceof DiscoveredMCPTool) {
+        console.log(`[ToolRegistry] MCP tool name collision, using fully qualified name`);
         tool = tool.asFullyQualifiedTool();
+        console.log(`[ToolRegistry] Registering MCP tool with qualified name: ${tool.name}`);
       } else {
         // Decide on behavior: throw error, log warning, or allow overwrite
         console.warn(
           `Tool with name "${tool.name}" is already registered. Overwriting.`,
         );
       }
+    }
+    if (tool instanceof DiscoveredMCPTool) {
+      console.log(`[ToolRegistry] Registering MCP tool: ${tool.name} (server: ${tool.serverName})`);
     }
     this.tools.set(tool.name, tool);
   }

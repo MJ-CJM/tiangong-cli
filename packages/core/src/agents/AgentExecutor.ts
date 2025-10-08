@@ -7,7 +7,6 @@
 import type { Config } from '../config/config.js';
 import type { ModelService } from '../services/modelService.js';
 import type { ToolRegistry } from '../tools/tool-registry.js';
-import type { McpClientManager } from '../tools/mcp-client-manager.js';
 import type {
   UnifiedRequest,
   UnifiedMessage,
@@ -17,12 +16,17 @@ import { AgentManager } from './AgentManager.js';
 import { ContextManager } from './ContextManager.js';
 import { ToolFilter } from './ToolFilter.js';
 import { MCPRegistry } from './MCPRegistry.js';
+import { Router } from './Router.js';
+import { HandoffManager } from './HandoffManager.js';
 import type {
   AgentDefinition,
   AgentExecuteOptions,
   AgentExecuteResponse,
   AgentRuntime,
+  HandoffContext,
+  RoutingConfig,
 } from './types.js';
+import { HandoffError } from './types.js';
 
 /**
  * Executes Agent conversations with isolated contexts and tool filtering
@@ -32,14 +36,13 @@ export class AgentExecutor {
   private contextManager: ContextManager;
   private toolFilter: ToolFilter;
   private mcpRegistry: MCPRegistry;
+  private router: Router | null = null;
+  private handoffManager: HandoffManager | null = null;
 
   constructor(
     private config: Config,
     private modelService: ModelService,
     private toolRegistry: ToolRegistry,
-    // MCP client manager will be used in P2 for MCP tool integration
-    // @ts-ignore
-    _mcpClientManager: McpClientManager
   ) {
     this.agentManager = new AgentManager();
     this.contextManager = new ContextManager();
@@ -50,7 +53,7 @@ export class AgentExecutor {
   /**
    * Initialize the executor by loading agents and MCP servers
    */
-  async initialize(): Promise<void> {
+  async initialize(routingConfig?: Partial<RoutingConfig>): Promise<void> {
     // Load agents
     await this.agentManager.loadAgents();
 
@@ -59,6 +62,19 @@ export class AgentExecutor {
     if (mcpServers) {
       this.mcpRegistry.registerServers(mcpServers);
     }
+
+    // Initialize router
+    this.router = new Router(
+      this.config,
+      this.agentManager,
+      this.modelService,
+      routingConfig
+    );
+
+    // Initialize handoff manager
+    this.handoffManager = new HandoffManager(this.agentManager);
+
+    console.log('[AgentExecutor] Initialized with routing and handoff support');
   }
 
   /**
@@ -109,6 +125,16 @@ export class AgentExecutor {
 
     // Get filtered tools for agent
     const toolDefinitions = this.getToolDefinitions(runtime.availableTools);
+
+    // Add handoff tools (transfer_to_* functions)
+    const handoffTools = this.buildHandoffTools(agent);
+    toolDefinitions.push(...handoffTools);
+
+    console.log(`[AgentExecutor] Tool definitions passed to model (${toolDefinitions.length}):`);
+    const mcpToolDefs = toolDefinitions.filter(t => t.name.includes('__'));
+    const handoffToolDefs = toolDefinitions.filter(t => t.name.startsWith('transfer_to_'));
+    console.log(`[AgentExecutor] MCP tool definitions (${mcpToolDefs.length}):`, mcpToolDefs.map(t => t.name));
+    console.log(`[AgentExecutor] Handoff tool definitions (${handoffToolDefs.length}):`, handoffToolDefs.map(t => t.name));
 
     // Execute with tool calling loop
     let totalTokensUsed = 0;
@@ -172,65 +198,147 @@ export class AgentExecutor {
 
         const { name, args, id } = call.functionCall;
 
-        try {
-          // Notify tool call start
-          if (options.onToolCall) {
-            options.onToolCall(name, args);
-          }
+        // Check if this is a handoff tool call
+        if (this.isHandoffTool(name)) {
+          console.log(`[AgentExecutor] Detected handoff tool call: ${name}`);
 
-          // Get tool and build invocation
-          const tool = this.toolRegistry.getTool(name);
-          if (!tool) {
-            throw new Error(`Tool '${name}' not found`);
-          }
+          try {
+            // Extract target agent from tool name
+            const targetAgent = this.extractHandoffTarget(name);
 
-          const invocation = tool.build(args);
+            // Validate handoff
+            if (!this.handoffManager) {
+              throw new Error('HandoffManager not initialized');
+            }
 
-          // Execute tool invocation with AbortController
-          const abortController = new AbortController();
-          const result = await invocation.execute(abortController.signal);
+            // Get conversation history for handoff context
+            const conversationHistory = this.contextManager.getContext(agentName, contextMode)
+              .conversationHistory;
 
-          // Notify tool call result
-          if (options.onToolResult) {
-            options.onToolResult(name, result);
-          }
+            // Create handoff context
+            const handoffContext = await this.handoffManager.initiateHandoff(
+              agentName,
+              targetAgent,
+              args['reason'] || 'Agent requested handoff',
+              args['context'],
+              conversationHistory
+            );
 
-          // Add function response
-          functionResponses.push({
-            role: MessageRole.FUNCTION,
-            content: [
-              {
-                type: 'function_response',
-                functionResponse: {
-                  name,
-                  content: result.llmContent,
-                  id,
-                },
-              },
-            ],
-          });
-        } catch (error) {
-          // Notify tool call error
-          if (options.onToolResult) {
-            options.onToolResult(name, null, error as Error);
-          }
+            // Execute handoff
+            const handoffResponse = await this.executeWithHandoff(
+              targetAgent,
+              handoffContext,
+              options
+            );
 
-          // Add error response
-          functionResponses.push({
-            role: MessageRole.FUNCTION,
-            content: [
-              {
-                type: 'function_response',
-                functionResponse: {
-                  name,
-                  content: {
-                    error: error instanceof Error ? error.message : String(error),
+            // Add handoff response
+            functionResponses.push({
+              role: MessageRole.FUNCTION,
+              content: [
+                {
+                  type: 'function_response',
+                  functionResponse: {
+                    name,
+                    content: {
+                      success: true,
+                      target_agent: targetAgent,
+                      response: handoffResponse.text,
+                    },
+                    id,
                   },
-                  id,
                 },
-              },
-            ],
-          });
+              ],
+            });
+
+            // After handoff, we can optionally return the handoff response directly
+            // For now, continue the loop to let the original agent acknowledge the handoff
+          } catch (error) {
+            console.error(`[AgentExecutor] Handoff error:`, error);
+
+            // Add error response
+            functionResponses.push({
+              role: MessageRole.FUNCTION,
+              content: [
+                {
+                  type: 'function_response',
+                  functionResponse: {
+                    name,
+                    content: {
+                      error:
+                        error instanceof HandoffError
+                          ? `Handoff failed: ${error.message} (${error.code})`
+                          : error instanceof Error
+                            ? error.message
+                            : String(error),
+                    },
+                    id,
+                  },
+                },
+              ],
+            });
+          }
+        } else {
+          // Regular tool call
+          try {
+            // Notify tool call start
+            if (options.onToolCall) {
+              options.onToolCall(name, args);
+            }
+
+            // Get tool and build invocation
+            const tool = this.toolRegistry.getTool(name);
+            if (!tool) {
+              throw new Error(`Tool '${name}' not found`);
+            }
+
+            const invocation = tool.build(args);
+
+            // Execute tool invocation with AbortController
+            const abortController = new AbortController();
+            const result = await invocation.execute(abortController.signal);
+
+            // Notify tool call result
+            if (options.onToolResult) {
+              options.onToolResult(name, result);
+            }
+
+            // Add function response
+            functionResponses.push({
+              role: MessageRole.FUNCTION,
+              content: [
+                {
+                  type: 'function_response',
+                  functionResponse: {
+                    name,
+                    content: result.llmContent,
+                    id,
+                  },
+                },
+              ],
+            });
+          } catch (error) {
+            // Notify tool call error
+            if (options.onToolResult) {
+              options.onToolResult(name, null, error as Error);
+            }
+
+            // Add error response
+            functionResponses.push({
+              role: MessageRole.FUNCTION,
+              content: [
+                {
+                  type: 'function_response',
+                  functionResponse: {
+                    name,
+                    content: {
+                      error: error instanceof Error ? error.message : String(error),
+                    },
+                    id,
+                  },
+                },
+              ],
+            });
+          }
         }
       }
 
@@ -257,6 +365,174 @@ export class AgentExecutor {
     };
 
     return executeResponse;
+  }
+
+  /**
+   * Auto-route user input to the best matching agent and execute
+   *
+   * @param prompt - User prompt
+   * @param options - Execution options
+   * @returns Agent response with routing info
+   */
+  async executeWithRouting(
+    prompt: string,
+    options: AgentExecuteOptions = {}
+  ): Promise<AgentExecuteResponse & { routedAgent?: string }> {
+    if (!this.router) {
+      throw new Error('Router not initialized. Call initialize() first.');
+    }
+
+    console.log('[AgentExecutor] Auto-routing user input...');
+
+    // Route to best agent
+    const routingResult = await this.router.route(prompt);
+
+    if (!routingResult) {
+      throw new Error('No suitable agent found for this request');
+    }
+
+    console.log(
+      `[AgentExecutor] Routed to agent: ${routingResult.agent.name} (confidence: ${routingResult.confidence})`
+    );
+
+    // Execute with routed agent
+    const response = await this.execute(routingResult.agent.name, prompt, options);
+
+    return {
+      ...response,
+      routedAgent: routingResult.agent.name,
+    };
+  }
+
+  /**
+   * Execute agent with handoff context (internal method for handoff chains)
+   *
+   * @param agentName - Target agent name
+   * @param handoffContext - Handoff context from previous agent
+   * @param options - Execution options
+   * @returns Agent response
+   */
+  async executeWithHandoff(
+    agentName: string,
+    handoffContext: HandoffContext,
+    options: AgentExecuteOptions = {}
+  ): Promise<AgentExecuteResponse> {
+    if (!this.handoffManager) {
+      throw new Error('HandoffManager not initialized. Call initialize() first.');
+    }
+
+    console.log(
+      `[AgentExecutor] Executing handoff: ${handoffContext.from_agent} -> ${agentName}`
+    );
+
+    // Build prompt with handoff context
+    const handoffPrompt = this.buildHandoffPrompt(handoffContext);
+
+    // Execute target agent with handoff context
+    const response = await this.execute(agentName, handoffPrompt, options);
+
+    // Complete handoff
+    this.handoffManager.completeHandoff(handoffContext);
+
+    return response;
+  }
+
+  /**
+   * Build prompt for handoff including context from previous agent
+   */
+  private buildHandoffPrompt(handoffContext: HandoffContext): string {
+    let prompt = `[Handoff from ${handoffContext.from_agent}]\n\n`;
+    prompt += `Reason: ${handoffContext.reason}\n\n`;
+
+    if (handoffContext.summary) {
+      prompt += `Summary: ${handoffContext.summary}\n\n`;
+    }
+
+    if (handoffContext.context) {
+      prompt += `Context: ${handoffContext.context}\n\n`;
+    }
+
+    if (handoffContext.conversation_history && handoffContext.conversation_history.length > 0) {
+      prompt += `Previous conversation:\n`;
+      for (const msg of handoffContext.conversation_history.slice(-5)) {
+        // Last 5 messages
+        const role = msg.role.toUpperCase();
+        const text = msg.content
+          .filter(p => p.type === 'text')
+          .map(p => p.text)
+          .join(' ');
+        prompt += `[${role}]: ${text}\n`;
+      }
+      prompt += '\n';
+    }
+
+    prompt += 'Please continue from here.';
+
+    return prompt;
+  }
+
+  /**
+   * Build handoff tools for an agent (transfer_to_* functions)
+   */
+  private buildHandoffTools(agent: AgentDefinition): import('../adapters/base/types.js').ToolDefinition[] {
+    if (!agent.handoffs || agent.handoffs.length === 0) {
+      return [];
+    }
+
+    const handoffTools: import('../adapters/base/types.js').ToolDefinition[] = [];
+
+    for (const handoff of agent.handoffs) {
+      handoffTools.push({
+        name: `transfer_to_${handoff.to}`,
+        description:
+          handoff.description ||
+          `Transfer this conversation to ${handoff.to} agent. ${handoff.when === 'auto' ? 'This handoff happens automatically when appropriate.' : 'Use this when you need specialized help from this agent.'}`,
+        parameters: {
+          type: 'object',
+          properties: {
+            reason: {
+              type: 'string',
+              description: 'Reason for transferring to this agent',
+            },
+            context: {
+              type: 'string',
+              description: 'Additional context to pass to the next agent',
+            },
+          },
+          required: ['reason'],
+        },
+      });
+    }
+
+    return handoffTools;
+  }
+
+  /**
+   * Check if a tool call is a handoff (transfer_to_*)
+   */
+  private isHandoffTool(toolName: string): boolean {
+    return toolName.startsWith('transfer_to_');
+  }
+
+  /**
+   * Extract target agent name from handoff tool name
+   */
+  private extractHandoffTarget(toolName: string): string {
+    return toolName.replace('transfer_to_', '');
+  }
+
+  /**
+   * Get router instance (for CLI commands)
+   */
+  getRouter(): Router | null {
+    return this.router;
+  }
+
+  /**
+   * Get handoff manager instance (for CLI commands)
+   */
+  getHandoffManager(): HandoffManager | null {
+    return this.handoffManager;
   }
 
   /**
@@ -290,12 +566,21 @@ export class AgentExecutor {
   private async buildRuntime(agent: AgentDefinition): Promise<AgentRuntime> {
     // Get all available tools
     const allToolNames = this.toolRegistry.getAllToolNames();
+    console.log(`[AgentExecutor] Agent: ${agent.name}`);
+    console.log(`[AgentExecutor] All tools from registry (${allToolNames.length}):`, allToolNames.filter(t => t.includes('__')).slice(0, 10));
+
+    // Get agent's allowed MCP servers
+    const mcpServers = this.mcpRegistry.getServersForAgent(agent);
+    console.log(`[AgentExecutor] MCP servers for agent:`, mcpServers);
+
+    // Filter out MCP tools from servers the agent is not allowed to use
+    const toolsWithMCPFilter = this.filterMCPTools(allToolNames, mcpServers);
+    console.log(`[AgentExecutor] After MCP server filter (${toolsWithMCPFilter.length}):`, toolsWithMCPFilter.filter(t => t.includes('__')));
 
     // Filter tools based on agent's allow/deny lists
-    const filteredTools = this.toolFilter.filterTools(allToolNames, agent);
-
-    // Add MCP tool filtering
-    const mcpServers = this.mcpRegistry.getServersForAgent(agent);
+    const filteredTools = this.toolFilter.filterTools(toolsWithMCPFilter, agent);
+    console.log(`[AgentExecutor] After allow/deny filter (${filteredTools.length}):`, filteredTools.filter(t => t.includes('__')));
+    console.log(`[AgentExecutor] Final available tools:`, filteredTools);
 
     return {
       definition: agent,
@@ -303,6 +588,50 @@ export class AgentExecutor {
       availableTools: filteredTools,
       mcpServers,
     };
+  }
+
+  /**
+   * Filter MCP tools based on agent's allowed MCP servers
+   *
+   * MCP tools are named like "<server-name>__<tool-name>" (e.g., "context7__get-library-docs")
+   * This method removes MCP tools from servers not in the agent's mcp.servers list
+   *
+   * @param allTools - All available tool names
+   * @param allowedServers - Server names the agent is allowed to use
+   * @returns Filtered tool names
+   */
+  private filterMCPTools(allTools: string[], allowedServers: string[]): string[] {
+    // If no MCP servers configured, allow all non-MCP tools
+    if (allowedServers.length === 0) {
+      return allTools.filter(tool => {
+        // Check if this looks like an MCP tool (has "__" separator)
+        // MCP tools are namespaced as "server__tool"
+        const parts = tool.split('__');
+        if (parts.length >= 2) {
+          // Check if this matches MCP server pattern
+          const firstPart = parts[0];
+          if (firstPart && /^[a-z][a-z0-9_-]*$/.test(firstPart)) {
+            // This looks like an MCP tool, exclude it
+            return false;
+          }
+        }
+        return true;
+      });
+    }
+
+    // Filter tools: keep non-MCP tools and MCP tools from allowed servers
+    return allTools.filter(tool => {
+      const parts = tool.split('__');
+      if (parts.length >= 2) {
+        const serverName = parts[0];
+        // If this looks like an MCP tool, only allow if server is in allowed list
+        if (serverName && /^[a-z][a-z0-9_-]*$/.test(serverName)) {
+          return allowedServers.includes(serverName);
+        }
+      }
+      // Not an MCP tool, allow it
+      return true;
+    });
   }
 
   /**
@@ -402,6 +731,25 @@ export class AgentExecutor {
     context: import('./types.js').AgentContext
   ): string {
     let systemMessage = agent.systemPrompt || '';
+
+    // Add handoff instructions if agent has configured handoffs
+    if (agent.handoffs && agent.handoffs.length > 0) {
+      systemMessage += '\n\n**Available Agent Handoffs**\n\n';
+      systemMessage += 'You have access to the following specialized agents through handoff tools:\n\n';
+
+      for (const handoff of agent.handoffs) {
+        const toolName = `transfer_to_${handoff.to}`;
+        const description = handoff.description || `Transfer to ${handoff.to} agent`;
+
+        systemMessage += `- **${toolName}**: ${description}\n`;
+      }
+
+      systemMessage += '\n**When to use handoff tools:**\n';
+      systemMessage += '- When the user\'s request falls outside your area of expertise or responsibility\n';
+      systemMessage += '- When you recognize keywords or patterns that match another agent\'s specialty\n';
+      systemMessage += '- When you identify that the task requires capabilities you don\'t have\n';
+      systemMessage += '- **IMPORTANT**: Call the handoff tool IMMEDIATELY when you recognize the need to transfer. Do NOT attempt to handle tasks that should be transferred to another agent.\n\n';
+    }
 
     // Add context mode instructions
     if (contextMode === 'isolated') {

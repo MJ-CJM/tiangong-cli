@@ -6,7 +6,7 @@
 
 ## 📋 命令总览
 
-Agents 系统现在包含 **6 个核心命令**，简洁易用：
+Agents 系统现在包含 **8 个核心命令**，简洁易用：
 
 | 命令 | 用途 | 示例 |
 |------|------|------|
@@ -16,6 +16,8 @@ Agents 系统现在包含 **6 个核心命令**，简洁易用：
 | `run` | 执行 agent | `/agents run code_review Check this file` |
 | `validate` | 验证 agent 配置 | `/agents validate debugger` |
 | `delete` | 删除 agent | `/agents delete debugger` |
+| **`route`** | **测试智能路由** | **`/agents route "实现登录功能"`** |
+| **`config`** | **管理路由配置** | **`/agents config show`** |
 
 ---
 
@@ -823,6 +825,251 @@ vim .gemini/agents/my-agent.md
 
 ---
 
-**更新日期**: 2025-10-06
-**版本**: 精简版 (5 命令 + 交互式支持)
+## 🧭 7. `/agents route` - 测试智能路由 ⭐
+
+测试智能路由，查看系统会为给定的提示选择哪个 Agent。
+
+### 基本语法
+
+```bash
+/agents route <prompt>
+```
+
+### 示例
+
+```bash
+# 测试路由：实现功能
+/agents route "帮我实现登录功能"
+# ✅ Selected Agent: code-imple (Confidence: 85%)
+
+# 测试路由：代码审查
+/agents route "审查这段代码有没有问题"
+# ✅ Selected Agent: code-review (Confidence: 90%)
+
+# 测试路由：修复bug
+/agents route "修复登录页面的错误"
+# ✅ Selected Agent: bug-fix (Confidence: 75%)
+```
+
+### 输出信息
+
+```
+✅ Routing Result
+
+Selected Agent: code-imple
+Title: Code Implementation
+Score: 40
+Confidence: 60%
+
+Matched Keywords: 实现, 登录
+Matched Patterns: 0 pattern(s)
+
+💡 Use `@code-imple 帮我实现登录功能` to execute with this agent.
+```
+
+### 使用场景
+
+1. **测试 Agent 触发规则** - 验证 triggers 配置是否正确
+2. **调试路由逻辑** - 查看关键词和模式匹配情况
+3. **优化触发条件** - 根据路由结果调整 agent 配置
+
+---
+
+## ⚙️  8. `/agents config` - 管理路由配置 ⭐
+
+查看和修改智能路由的配置。
+
+### 基本语法
+
+```bash
+# 查看当前配置
+/agents config show
+
+# 启用/禁用路由
+/agents config enable
+/agents config disable
+
+# 修改配置
+/agents config set <key> <value>
+```
+
+### 子命令
+
+| 子命令 | 用途 | 示例 |
+|--------|------|------|
+| `show` | 显示当前配置 | `/agents config show` |
+| `enable` | 启用路由 | `/agents config enable` |
+| `disable` | 禁用路由 | `/agents config disable` |
+| `set` | 更新配置项 | `/agents config set strategy hybrid` |
+
+### 可配置项
+
+| 配置键 | 值类型 | 说明 | 示例 |
+|--------|-------|------|------|
+| `strategy` | `rule`\|`llm`\|`hybrid` | 路由策略 | `rule` |
+| `rule.confidence_threshold` | `0-100` | 规则路由置信度阈值 | `80` |
+| `llm.model` | 模型名称 | LLM 路由使用的模型 | `gemini-2.0-flash` |
+| `llm.timeout` | 毫秒数 | LLM 路由超时时间 | `5000` |
+| `fallback` | `none`\|`prompt_user`\|`default_agent` | 无匹配时的回退策略 | `prompt_user` |
+
+### 示例
+
+```bash
+# 查看当前配置
+/agents config show
+
+# 启用路由
+/agents config enable
+
+# 切换到规则路由（最快）
+/agents config set strategy rule
+
+# 切换到 LLM 路由（最智能）
+/agents config set strategy llm
+
+# 切换到混合路由（平衡）
+/agents config set strategy hybrid
+
+# 调整置信度阈值
+/agents config set rule.confidence_threshold 85
+
+# 更换 LLM 模型
+/agents config set llm.model gemini-1.5-pro
+
+# 调整超时时间
+/agents config set llm.timeout 10000
+
+# 更改回退策略
+/agents config set fallback none
+```
+
+### 三种路由策略对比
+
+| 策略 | 速度 | 准确度 | 适用场景 |
+|------|------|--------|----------|
+| `rule` | ⚡ 极快 (< 10ms) | 🎯 中等 | 关键词明确、规则清晰 |
+| `llm` | 🐢 较慢 (1-3s) | 🎯🎯🎯 最高 | 复杂场景、语义理解 |
+| `hybrid` | ⚡ 快 (通常 < 10ms) | 🎯🎯 较高 | **推荐** - 最佳平衡 |
+
+**Hybrid 策略工作原理**:
+1. 先尝试规则匹配 (< 10ms)
+2. 如果置信度 >= 阈值，使用规则结果
+3. 否则回退到 LLM 路由 (1-3s)
+
+### 配置输出示例
+
+```
+⚙️  Routing Configuration
+
+Enabled: ✅ Yes
+Strategy: hybrid
+Confidence Threshold: 70
+LLM Model: gemini-2.0-flash
+LLM Timeout: 5000ms
+Fallback: prompt_user
+
+💡 Available Commands:
+- `/agents config show` - Show current config
+- `/agents config enable` - Enable routing
+- `/agents config disable` - Disable routing
+- `/agents config set <key> <value>` - Update config
+
+Examples:
+- `/agents config set strategy hybrid`
+- `/agents config set rule.confidence_threshold 80`
+- `/agents config set llm.model gemini-2.0-flash`
+```
+
+### 注意事项
+
+⚠️  **运行时修改 vs 持久化**
+
+- 使用 `/agents config set` 的修改是**运行时生效**，重启后恢复默认
+- 要持久化配置，需要在 `.gemini/settings.json` 中添加：
+
+```json
+{
+  "routing": {
+    "enabled": true,
+    "strategy": "hybrid",
+    "rule": {
+      "confidence_threshold": 80
+    },
+    "llm": {
+      "model": "gemini-2.0-flash",
+      "timeout": 5000
+    },
+    "fallback": "prompt_user"
+  }
+}
+```
+
+---
+
+## 🚀 快速上手路由与移交
+
+### 场景 1: 启用智能路由
+
+```bash
+# 1. 启用路由
+/agents config enable
+
+# 2. 测试路由
+/agents route "实现登录功能"
+
+# 3. 根据路由结果使用 agent
+@code-imple 实现登录功能
+```
+
+### 场景 2: Agent 自动移交
+
+在 Agent 配置文件中添加 handoffs:
+
+```yaml
+---
+kind: agent
+name: code-review
+handoffs:
+  - to: code-imple
+    description: "Transfer for implementation after review"
+    include_context: true
+---
+
+# Agent 会自动调用 transfer_to_code_imple 工具
+```
+
+执行：
+```bash
+@code-review 审查并修复这段代码
+
+# 流程:
+# 1. code-review 审查代码
+# 2. 发现问题，自动调用 transfer_to_code_imple
+# 3. code-imple 收到移交，执行修复
+# 4. 返回最终结果
+```
+
+### 场景 3: 调试路由配置
+
+```bash
+# 1. 查看当前配置
+/agents config show
+
+# 2. 测试路由
+/agents route "你的提示"
+
+# 3. 如果路由不准确，调整策略
+/agents config set strategy llm
+
+# 4. 或调整置信度阈值
+/agents config set rule.confidence_threshold 85
+
+# 5. 重新测试
+/agents route "你的提示"
+```
+
+---
+
+**更新日期**: 2025-10-07
+**版本**: 完整版 (8 命令 + 路由与移交支持)
 **状态**: ✅ 完成

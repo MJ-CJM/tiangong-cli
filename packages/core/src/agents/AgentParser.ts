@@ -63,6 +63,8 @@ export class AgentParser {
       contextMode: frontMatter.contextMode,
       tools: frontMatter.tools,
       mcp: frontMatter.mcp,
+      triggers: frontMatter.triggers,
+      handoffs: frontMatter.handoffs,
       systemPrompt,
       filePath,
       createdAt: fileStats.birthtime,
@@ -95,6 +97,8 @@ export class AgentParser {
     if (definition.contextMode) frontMatter['contextMode'] = definition.contextMode;
     if (definition.tools) frontMatter['tools'] = definition.tools;
     if (definition.mcp) frontMatter['mcp'] = definition.mcp;
+    if (definition.triggers) frontMatter['triggers'] = definition.triggers;
+    if (definition.handoffs) frontMatter['handoffs'] = definition.handoffs;
 
     // Use gray-matter to stringify
     const result = matter.stringify(definition.systemPrompt, frontMatter);

@@ -737,7 +737,6 @@ export class Config {
         this,
         modelService,
         this.toolRegistry,
-        null as any // MCP client manager will be integrated in future
       );
 
       await this.agentExecutor.initialize();

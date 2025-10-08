@@ -84,7 +84,7 @@ function getAvailableModelsFromConfig(
 
 export const agentsCommand: SlashCommand = {
   name: 'agents',
-  description: 'Manage specialized AI agents - create, list, info, validate, delete, run, clear, context',
+  description: 'Manage specialized AI agents - create, list, info, validate, delete, run, clear, context, route, config',
   kind: CommandKind.BUILT_IN,
   subCommands: [
     {
@@ -1525,6 +1525,313 @@ ${useAI ? `💡 **Tip:**
             {
               type: MessageType.ERROR,
               text: `Failed to show context: ${error instanceof Error ? error.message : String(error)}`,
+            },
+            Date.now()
+          );
+        }
+      },
+    },
+    {
+      name: 'route',
+      description: 'Test routing for a given prompt (shows which agent would be selected)',
+      kind: CommandKind.BUILT_IN,
+      action: async (context: CommandContext, args?: string) => {
+        try {
+          if (!args || args.trim() === '') {
+            context.ui.addItem(
+              {
+                type: MessageType.ERROR,
+                text: 'Usage: /agents route <prompt> [--execute]\n\nExamples:\n  /agents route "实现登录功能"          # Test routing only\n  /agents route "实现登录功能" --execute  # Test and execute',
+              },
+              Date.now()
+            );
+            return;
+          }
+
+          if (!context.services.config) {
+            context.ui.addItem(
+              {
+                type: MessageType.ERROR,
+                text: 'Configuration service not available.',
+              },
+              Date.now()
+            );
+            return;
+          }
+
+          const executor = await context.services.config.getAgentExecutor();
+          const router = executor.getRouter();
+
+          if (!router) {
+            context.ui.addItem(
+              {
+                type: MessageType.ERROR,
+                text: 'Router not initialized. Please restart the application.',
+              },
+              Date.now()
+            );
+            return;
+          }
+
+          if (!router.isEnabled()) {
+            context.ui.addItem(
+              {
+                type: MessageType.INFO,
+                text: '⚠️  Routing is currently disabled.\n\nEnable it with: /agents config enable',
+              },
+              Date.now()
+            );
+            return;
+          }
+
+          // Parse arguments: check for --execute flag
+          const trimmedArgs = args.trim();
+          const executeFlag = trimmedArgs.includes('--execute');
+          const prompt = trimmedArgs.replace(/\s*--execute\s*$/, '').replace(/\s*--execute\s+/, ' ').trim();
+
+          if (!prompt) {
+            context.ui.addItem(
+              {
+                type: MessageType.ERROR,
+                text: 'Prompt cannot be empty.\n\nUsage: /agents route <prompt> [--execute]',
+              },
+              Date.now()
+            );
+            return;
+          }
+
+          context.ui.addItem(
+            {
+              type: MessageType.INFO,
+              text: `🔍 ${executeFlag ? 'Routing and executing' : 'Testing routing for'}: "${prompt}"\n\nPlease wait...`,
+            },
+            Date.now()
+          );
+
+          const result = await router.route(prompt);
+
+          if (!result) {
+            context.ui.addItem(
+              {
+                type: MessageType.INFO,
+                text: '❌ No suitable agent found for this prompt.\n\nTry adjusting your routing configuration or creating more agents.',
+              },
+              Date.now()
+            );
+            return;
+          }
+
+          let message = `✅ **Routing Result**\n\n`;
+          message += `**Selected Agent**: ${result.agent.name}\n`;
+          message += `**Title**: ${result.agent.title}\n`;
+          message += `**Score**: ${result.score}\n`;
+          message += `**Confidence**: ${result.confidence}%\n\n`;
+
+          if (result.matchedKeywords.length > 0) {
+            message += `**Matched Keywords**: ${result.matchedKeywords.join(', ')}\n`;
+          }
+          if (result.matchedPatterns.length > 0) {
+            message += `**Matched Patterns**: ${result.matchedPatterns.length} pattern(s)\n`;
+          }
+
+          if (!executeFlag) {
+            message += `\n💡 Use \`@${result.agent.name} ${prompt}\` to execute with this agent.`;
+            message += `\n💡 Or use \`/agents route "${prompt}" --execute\` to route and execute in one step.`;
+          }
+
+          context.ui.addItem(
+            {
+              type: MessageType.INFO,
+              text: message,
+            },
+            Date.now()
+          );
+
+          // If --execute flag is present, execute the agent
+          if (executeFlag) {
+            context.ui.addItem(
+              {
+                type: MessageType.INFO,
+                text: `\n🚀 Executing with agent: **${result.agent.title || result.agent.name}**\n`,
+              },
+              Date.now()
+            );
+
+            // Execute the agent by calling the run command's action
+            // Find the 'run' subcommand in the same subCommands array
+            const runSubCommand = agentsCommand.subCommands?.find((cmd) => cmd.name === 'run');
+            if (runSubCommand && runSubCommand.action) {
+              await runSubCommand.action(context, `${result.agent.name} ${prompt}`);
+            } else {
+              context.ui.addItem(
+                {
+                  type: MessageType.ERROR,
+                  text: 'Failed to execute agent: run command not found.',
+                },
+                Date.now()
+              );
+            }
+          }
+        } catch (error) {
+          context.ui.addItem(
+            {
+              type: MessageType.ERROR,
+              text: `Failed to test routing: ${error instanceof Error ? error.message : String(error)}`,
+            },
+            Date.now()
+          );
+        }
+      },
+    },
+    {
+      name: 'config',
+      description: 'View or modify routing configuration',
+      kind: CommandKind.BUILT_IN,
+      action: async (context: CommandContext, args?: string) => {
+        try {
+          if (!context.services.config) {
+            context.ui.addItem(
+              {
+                type: MessageType.ERROR,
+                text: 'Configuration service not available.',
+              },
+              Date.now()
+            );
+            return;
+          }
+
+          const executor = await context.services.config.getAgentExecutor();
+          const router = executor.getRouter();
+
+          if (!router) {
+            context.ui.addItem(
+              {
+                type: MessageType.ERROR,
+                text: 'Router not initialized. Please restart the application.',
+              },
+              Date.now()
+            );
+            return;
+          }
+
+          // Parse subcommand
+          const parts = args?.trim().split(/\s+/) || [];
+          const subCmd = parts[0] || 'show';
+
+          if (subCmd === 'show') {
+            // Show current configuration
+            const config = router.getConfig();
+            let message = `⚙️  **Routing Configuration**\n\n`;
+            message += `**Enabled**: ${config.enabled ? '✅ Yes' : '❌ No'}\n`;
+            message += `**Strategy**: ${config.strategy}\n`;
+            message += `**Confidence Threshold**: ${config.rule.confidence_threshold}\n`;
+            message += `**LLM Model**: ${config.llm.model}\n`;
+            message += `**LLM Timeout**: ${config.llm.timeout}ms\n`;
+            message += `**Fallback**: ${config.fallback}\n\n`;
+            message += `💡 **Available Commands**:\n`;
+            message += `- \`/agents config show\` - Show current config\n`;
+            message += `- \`/agents config enable\` - Enable routing\n`;
+            message += `- \`/agents config disable\` - Disable routing\n`;
+            message += `- \`/agents config set <key> <value>\` - Update config\n\n`;
+            message += `**Examples**:\n`;
+            message += `- \`/agents config set strategy hybrid\`\n`;
+            message += `- \`/agents config set rule.confidence_threshold 80\`\n`;
+            message += `- \`/agents config set llm.model gemini-2.0-flash\`\n`;
+
+            context.ui.addItem(
+              {
+                type: MessageType.INFO,
+                text: message,
+              },
+              Date.now()
+            );
+          } else if (subCmd === 'enable') {
+            router.enable();
+            context.ui.addItem(
+              {
+                type: MessageType.INFO,
+                text: '✅ Routing enabled!\n\nYou can now use auto-routing features.',
+              },
+              Date.now()
+            );
+          } else if (subCmd === 'disable') {
+            router.disable();
+            context.ui.addItem(
+              {
+                type: MessageType.INFO,
+                text: '❌ Routing disabled.\n\nManual agent selection is required.',
+              },
+              Date.now()
+            );
+          } else if (subCmd === 'set') {
+            const key = parts[1];
+            const value = parts.slice(2).join(' ');
+
+            if (!key || !value) {
+              context.ui.addItem(
+                {
+                  type: MessageType.ERROR,
+                  text: 'Usage: /agents config set <key> <value>\n\nExample: /agents config set strategy hybrid',
+                },
+                Date.now()
+              );
+              return;
+            }
+
+            // Parse and update configuration
+            const updates: any = {};
+            if (key === 'strategy') {
+              if (value === 'rule' || value === 'llm' || value === 'hybrid') {
+                updates.strategy = value;
+              } else {
+                throw new Error('Invalid strategy. Must be: rule, llm, or hybrid');
+              }
+            } else if (key === 'rule.confidence_threshold') {
+              const threshold = parseInt(value, 10);
+              if (isNaN(threshold) || threshold < 0 || threshold > 100) {
+                throw new Error('Invalid threshold. Must be between 0 and 100');
+              }
+              updates.rule = { confidence_threshold: threshold };
+            } else if (key === 'llm.model') {
+              updates.llm = { model: value, timeout: router.getConfig().llm.timeout };
+            } else if (key === 'llm.timeout') {
+              const timeout = parseInt(value, 10);
+              if (isNaN(timeout) || timeout < 1000) {
+                throw new Error('Invalid timeout. Must be at least 1000ms');
+              }
+              updates.llm = { model: router.getConfig().llm.model, timeout };
+            } else if (key === 'fallback') {
+              if (value === 'none' || value === 'prompt_user' || value === 'default_agent') {
+                updates.fallback = value;
+              } else {
+                throw new Error('Invalid fallback. Must be: none, prompt_user, or default_agent');
+              }
+            } else {
+              throw new Error(`Unknown config key: ${key}`);
+            }
+
+            router.updateConfig(updates);
+            context.ui.addItem(
+              {
+                type: MessageType.INFO,
+                text: `✅ Configuration updated!\n\n**${key}** = ${value}\n\n💡 This is a runtime change and won't persist after restart.\nTo make it permanent, update your settings.json file.`,
+              },
+              Date.now()
+            );
+          } else {
+            context.ui.addItem(
+              {
+                type: MessageType.ERROR,
+                text: `Unknown subcommand: ${subCmd}\n\nAvailable: show, enable, disable, set`,
+              },
+              Date.now()
+            );
+          }
+        } catch (error) {
+          context.ui.addItem(
+            {
+              type: MessageType.ERROR,
+              text: `Failed to modify config: ${error instanceof Error ? error.message : String(error)}`,
             },
             Date.now()
           );

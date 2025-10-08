@@ -1,362 +1,257 @@
-# Agent 交互式创建 - 设计方案
+# Agents 系统架构设计
 
-> **问题**: 当前的 AI 生成流程缺少交互式确认步骤
-> **目标**: 让用户逐步确认名字、描述、作用域、模型、工具权限等，最后才生成 Agent
-
----
-
-## 🎯 理想的用户体验
-
-```bash
-> /agents create
-
-🪄 **Agent Creation Wizard**
-
-Step 1/7: Agent Name
-  What should we call this agent? (lowercase-with-hyphens)
-  → debug-helper
-
-Step 2/7: Display Title
-  Title for "debug-helper": Debug Helper
-  Confirm? (yes/no) → yes
-
-Step 3/7: Description
-  Short description (optional, press Enter to skip):
-  → Helps debug Python and JavaScript errors
-
-Step 4/7: Scope
-  Where to save?
-    1. Project (.gemini/agents/)
-    2. Global (~/.gemini/agents/)
-  → 1
-
-Step 5/7: Model
-  Which model?
-    1. gemini-2.0-flash (recommended)
-    2. gemini-1.5-pro
-    3. claude-3.5-sonnet
-    4. gpt-4o
-  → 1
-
-Step 6/7: Content Creation
-  How to create content?
-    1. AI Generate ⭐ (recommended)
-    2. Manual Template
-  → 1
-
-Step 7/7: Purpose (for AI generation)
-  Describe what this agent should do:
-  → Debug Python and JavaScript errors with detailed explanations
+> **版本**: 2.0 | **最后更新**: 2025-10-07
 
 ---
 
-📋 **Review Your Configuration:**
+## 设计目标
 
-  Name: debug-helper
-  Title: Debug Helper
-  Description: Helps debug Python and JavaScript errors
-  Scope: project
-  Model: gemini-2.0-flash
-  Mode: AI Generated
-  Purpose: Debug Python and JavaScript errors with detailed explanations
-  Tools: read_file, grep, glob, bash (default)
+为 Gemini CLI 添加多 Agent 系统，实现：
 
-Looks good? (yes/no) → yes
+1. **专业化分工** - 不同 Agent 专注不同任务
+2. **独立上下文** - 避免上下文混乱
+3. **工具隔离** - 基于最小权限原则
+4. **MCP 集成** - 支持外部工具服务器
+5. **易用性** - 简单的创建和使用流程
 
-🤖 Generating agent content using AI...
+---
 
-✨ AI Generated Content:
-──────────────────────────────────────
+## 核心架构
+
+### 组件关系图
+
+\`\`\`
+┌─────────────────────────────────────────┐
+│          CLI Layer (Ink/React)          │
+│  - agentsCommand.ts                     │
+│  - AgentCreationWizard.tsx              │
+└────────────────┬────────────────────────┘
+                 │
+┌────────────────┴────────────────────────┐
+│           Core Layer                    │
+│  ┌────────────────────────────────┐    │
+│  │     AgentExecutor              │    │
+│  │  - execute()                   │    │
+│  │  - buildRuntime()              │    │
+│  │  - filterMCPTools()            │    │
+│  └────────┬───────────────────────┘    │
+│           │                             │
+│  ┌────────┴───────────┬─────────────┐  │
+│  │                    │             │  │
+│  │ AgentManager       │ ContextMgr  │  │
+│  │ - loadAgents()     │ - getCtx()  │  │
+│  │ - getAgent()       │ - addMsg()  │  │
+│  │                    │             │  │
+│  └────────────────────┴─────────────┘  │
+│                                         │
+│  ┌──────────────────────────────────┐  │
+│  │       ToolFilter                 │  │
+│  │  - filterTools()                 │  │
+│  └──────────────────────────────────┘  │
+│                                         │
+│  ┌──────────────────────────────────┐  │
+│  │       MCPRegistry                │  │
+│  │  - getServersForAgent()          │  │
+│  └──────────────────────────────────┘  │
+└─────────────────────────────────────────┘
+                 │
+┌────────────────┴────────────────────────┐
+│        Tool Layer                       │
+│  - ToolRegistry                         │
+│  - McpClientManager                     │
+│  - DiscoveredMCPTool                    │
+└─────────────────────────────────────────┘
+\`\`\`
+
+---
+
+## Agent 定义格式
+
+### 文件结构
+
+\`\`\`markdown
+---
+kind: agent
+name: code-imple
+title: Code Implementation
+description: Specialized in code implementation
+model: qwen3-coder-flash
+scope: project
+version: 1.0.0
+contextMode: isolated
+
+tools:
+  allow: [
+    "read_file",
+    "write_file",
+    "bash",
+    "context7__get-library-docs"
+  ]
+  deny: []
+
+mcp:
+  servers: ["context7"]
+---
+
 # Role
 
-You are a debugging expert specializing in Python and JavaScript...
+You are a code implementation specialist...
 
 ## Responsibilities
-- Analyze error messages and stack traces
-- Identify root causes of bugs
+
+- Translate requirements to code
+- Follow best practices
 ...
-──────────────────────────────────────
+\`\`\`
 
-Accept this content? (yes/no/regenerate) → yes
+### 字段说明
 
-✅ Created agent "debug-helper"
-
-File: .gemini/agents/debug-helper.md
-```
-
----
-
-## 🔧 技术实现方案
-
-### 方案 A: 真正的交互式输入 (复杂，需要架构改动)
-
-**需要实现:**
-1. 新的输入模式 (类似 prompt/inquirer)
-2. 暂停主输入流
-3. 收集多步骤答案
-4. 恢复主输入流
-
-**难度**: ⭐⭐⭐⭐⭐ (需要深度集成)
-
-**优点**:
-- 真正的交互式体验
-- 用户友好
-
-**缺点**:
-- 需要大量架构改动
-- 可能影响现有功能
-- 开发时间长
+| 字段 | 类型 | 必需 | 说明 |
+|------|------|------|------|
+| kind | string | ✅ | 固定为 "agent" |
+| name | string | ✅ | Agent 唯一标识 |
+| title | string | ⚪ | 显示名称 |
+| description | string | ⚪ | 简短描述 |
+| model | string | ⚪ | AI 模型 |
+| scope | enum | ⚪ | project/global |
+| version | string | ⚪ | 版本号 |
+| contextMode | enum | ⚪ | isolated/shared |
+| tools.allow | array | ⚪ | 白名单工具 |
+| tools.deny | array | ⚪ | 黑名单工具 |
+| mcp.servers | array | ⚪ | MCP 服务器 |
 
 ---
 
-### 方案 B: 分步确认式 (推荐，易实现)
+## 核心流程
 
-**实现方式:**
+### Agent 执行流程
 
-```bash
-# 第一步：收集基本信息
-/agents create debug-helper
+\`\`\`
+1. User calls agent
+   ↓
+2. AgentExecutor.execute()
+   ├─ buildRuntime()
+   │  ├─ 获取所有工具
+   │  ├─ 过滤 MCP 工具 (按 mcp.servers)
+   │  ├─ 过滤工具 (按 allow/deny)
+   │  └─ 返回 filtered tools
+   ├─ 获取/创建上下文 (isolated/shared)
+   └─ 工具调用循环
+      ├─ 发送消息给模型
+      ├─ 模型返回工具调用或文本
+      ├─ 执行工具
+      └─ 继续循环直到完成
+   ↓
+3. 返回最终响应
+\`\`\`
 
-📋 Configure your agent:
-  Name: debug-helper
-  Title: Debug Helper (auto-generated)
-  Scope: project (default)
-  Model: gemini-2.0-flash (default)
+### 工具过滤流程
 
-Continue with these settings? Reply with:
-  - "yes" to continue
-  - "customize" to see all options
-
-> yes
-
-# 第二步：选择创建模式
-Choose content creation mode:
-  1. AI Generate ⭐ - Describe purpose, AI creates content
-  2. Manual - Create empty template
-
-Reply with "1" or "2":
-
-> 1
-
-# 第三步：AI 生成
-Describe this agent's purpose in detail:
-
-> Debug Python and JavaScript errors with detailed explanations
-
-🤖 Generating...
-
-✨ Preview of generated content:
-[显示前300字符...]
-
-Reply with:
-  - "accept" to create the agent
-  - "show-full" to see full content
-  - "regenerate" to try again
-  - "cancel" to abort
-
-> accept
-
-✅ Agent created!
-```
-
-**优点**:
-- 无需架构改动
-- 逐步确认
-- 可以在任何步骤取消
-
-**缺点**:
-- 需要多轮对话
-- 不如真正的交互式流畅
+\`\`\`
+All Tools (from ToolRegistry)
+  ↓
+[MCP Server Filter]
+  - If agent.mcp.servers: ["context7"]
+  - Keep: context7__* tools
+  - Remove: github__*, slack__* tools
+  ↓
+[Allow/Deny Filter]
+  - If tools.allow specified
+  - Keep only tools in allow list
+  - Remove tools in deny list
+  ↓
+Final Tool List (passed to model)
+\`\`\`
 
 ---
 
-### 方案 C: 预览 + 确认模式 (当前实现的改进)
+## 关键设计决策
 
-**实现方式:**
+### 1. 文件式定义
 
-```bash
-/agents create debug-helper --ai --purpose "Debug Python errors"
+**决策**: 使用 Markdown + YAML 文件定义 Agent
 
-📋 **Agent Configuration Preview:**
-┌──────────────────────────────────────┐
-│ Name:        debug-helper             │
-│ Title:       Debug Helper             │
-│ Scope:       project                  │
-│ Model:       gemini-2.0-flash         │
-│ Mode:        AI Generated             │
-│ Purpose:     Debug Python errors      │
-│ Tools:       read_file, grep, bash    │
-└──────────────────────────────────────┘
+**原因**:
+- ✅ 版本控制友好
+- ✅ 易于编辑和审查
+- ✅ 支持富文本系统提示词
+- ✅ 跨项目共享方便
 
-🤖 Generating AI content...
+### 2. 两级工具过滤
 
-✨ **Generated Content Preview:**
-┌──────────────────────────────────────┐
-│ # Role                                │
-│ You are a debugging expert...         │
-│                                       │
-│ ## Responsibilities                   │
-│ - Analyze error messages              │
-│ - Identify root causes                │
-│ ...                                   │
-└──────────────────────────────────────┘
+**决策**: MCP 服务器级 + 工具级双重过滤
 
-To proceed, reply with:
-  • **"create"** - Create this agent
-  • **"edit <field>"** - Modify a field (e.g., "edit tools")
-  • **"regenerate"** - Re-generate AI content
-  • **"show-full"** - View complete content
-  • **"cancel"** - Cancel creation
+**原因**:
+- ✅ 最小权限原则
+- ✅ 服务器级控制（粗粒度）
+- ✅ 工具级控制（细粒度）
+- ✅ Defense in depth
 
-> create
+### 3. 默认 Isolated 上下文
 
-✅ Agent "debug-helper" created successfully!
-```
+**决策**: 默认使用 isolated 模式
 
-**优点**:
-- 清晰的预览
-- 可以修改和确认
-- 实现相对简单
+**原因**:
+- ✅ 安全性优先
+- ✅ 避免意外泄露
+- ✅ 清晰的任务边界
+- ✅ 需要时可显式指定 shared
 
-**缺点**:
-- 仍需对话式交互
-- 不是一个命令完成
+### 4. 信任文件夹机制
+
+**决策**: MCP 工具仅在信任文件夹中可用
+
+**原因**:
+- ✅ 安全性（防止恶意项目）
+- ✅ 用户同意（显式授权）
+- ✅ 符合安全最佳实践
 
 ---
 
-## 💡 推荐实现: 混合方案
+## 技术约束
 
-### Phase 1: 改进当前命令 (立即可用)
+### 性能要求
 
-```bash
-# 方式 1: 快速创建 (当前已支持)
-/agents create my-agent --ai --purpose "Debug errors"
+- Agent 切换延迟 < 100ms ✅
+- 工具过滤开销 < 10ms ✅
+- 上下文隔离无泄漏 ✅
 
-# 方式 2: 详细预览模式 (新增)
-/agents create my-agent --ai --purpose "Debug errors" --preview
+### 兼容性
 
-# 显示详细配置和生成的内容预览
-# 需要用户回复 "confirm" 才创建
-```
-
-### Phase 2: 真正的交互式向导 (未来)
-
-```bash
-/agents wizard
-
-# 启动完整的交互式向导
-# 逐步收集所有信息
-```
+- 支持多种 AI 模型 ✅
+- 支持 MCP 协议标准 ✅
+- 与现有工具系统兼容 ✅
 
 ---
 
-## 📝 当前的问题与建议
+## 扩展性
 
-### 当前实现的问题
+### 当前支持
 
-1. ❌ 没有显示完整的配置信息
-2. ❌ 没有给用户确认的机会
-3. ❌ AI 生成后直接创建，无法预览完整内容
-4. ❌ 无法修改或重新生成
+- ✅ 自定义 Agent 定义
+- ✅ 项目级和全局级 Agent
+- ✅ MCP 工具集成
+- ✅ AI 内容生成
+- ✅ 交互式创建
 
-### 立即可以改进的点
+### 未来扩展
 
-1. ✅ **显示配置摘要**
-   ```
-   📋 Configuration:
-     Name: debug
-     Title: Debug
-     Scope: project
-     Model: gemini-2.0-flash
-     Purpose: Debug Python and JavaScript errors
-   ```
+- 🔄 自动路由（基于 triggers）
+- 🔄 Agent 间移交（handoffs）
+- 🔄 输出校验（guardrails）
+- 🔄 状态记忆（memory）
+- 🔄 图编排（workflow）
+- 🔄 可观测性（tracing）
 
-2. ✅ **显示完整生成的内容** (不只是前300字符)
-   ```
-   ✨ AI Generated Content:
-   ─────────────────────────────
-   [完整内容]
-   ─────────────────────────────
-   ```
-
-3. ✅ **添加确认提示**
-   ```
-   This will create:
-     File: .gemini/agents/debug.md
-
-   Reply "confirm" to create, or "cancel" to abort
-   ```
-
-4. ✅ **支持重新生成**
-   ```
-   Reply "regenerate" to try again with different wording
-   ```
+详见 [ROADMAP.md](./ROADMAP.md)
 
 ---
 
-## 🎯 建议的实施步骤
+**文档版本**: 2.0 (整合版)
+**创建日期**: 2025-10-04
+**最后更新**: 2025-10-07
 
-### 第一阶段 (1-2 天)
-
-改进当前的 `create` 命令:
-
-1. 添加 `--preview` 标志
-2. 显示完整配置信息
-3. 显示完整 AI 生成内容
-4. 要求用户确认再创建
-
-```bash
-/agents create debug --ai --purpose "..." --preview
-# 显示所有信息，等待确认
-```
-
-### 第二阶段 (3-5 天)
-
-添加基于对话的确认流程:
-
-```bash
-/agents create debug --ai --purpose "..."
-# 显示配置
-# 提示: Reply "confirm" to create
-
-> confirm
-# 创建 agent
-```
-
-### 第三阶段 (1-2 周)
-
-实现真正的交互式向导:
-
-```bash
-/agents wizard
-# 逐步询问每个字段
-# 实时收集输入
-# 最后确认并创建
-```
-
----
-
-## 📚 参考实现
-
-类似的 CLI 交互式体验:
-
-1. **npm init** - 逐步询问
-2. **git config** - 交互式配置
-3. **vue create** - 选择预设
-4. **create-react-app** - 确认配置
-
----
-
-## 总结
-
-**立即可做 (方案 C 改进版)**:
-- 在当前命令中添加详细预览
-- 显示完整生成内容
-- 添加确认步骤
-
-**未来可做 (方案 A)**:
-- 实现真正的交互式向导
-- 需要输入系统集成
-- 提供最佳用户体验
-
-建议先实现方案 C 的改进版，让用户至少能看到完整信息并确认，然后再考虑方案 A 的完整交互式实现。
+详细实现请参考：
+- [IMPLEMENTATION.md](./IMPLEMENTATION.md) - 实现细节
+- [CONTEXT_MODE.md](./CONTEXT_MODE.md) - 上下文模式
+- [MCP_INTEGRATION.md](./MCP_INTEGRATION.md) - MCP 集成

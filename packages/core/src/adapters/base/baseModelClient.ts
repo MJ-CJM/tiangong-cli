@@ -58,7 +58,7 @@ export interface BaseModelClient {
  * Abstract base class providing common functionality for model clients
  */
 export abstract class AbstractModelClient implements BaseModelClient {
-  constructor(readonly config: ModelConfig) {}
+  constructor(public readonly config: ModelConfig) {}
 
   abstract generateContent(request: UnifiedRequest): Promise<UnifiedResponse>;
   abstract generateContentStream(request: UnifiedRequest): AsyncGenerator<StreamChunk>;

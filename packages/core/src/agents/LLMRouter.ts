@@ -1,7 +1,7 @@
 /**
  * @license
- * Copyright 2025 Google LLC
- * SPDX-License-Identifier: Apache-2.0
+ * Copyright 2025 Gemini CLI
+ * SPDX-License-Identifier: MIT
  */
 
 import type { AgentManager } from './AgentManager.js';
@@ -34,7 +34,9 @@ export class LLMRouter {
 
     // Build agent descriptions for the routing prompt
     const agentDescriptions = agents
-      .map((agent, idx) => `${idx + 1}. **${agent.name}**\n   - Title: ${agent.title}\n   - Description: ${agent.description || 'No description'}`)
+      .map((agent, idx) => {
+        return `${idx + 1}. **${agent.name}**\n   - Title: ${agent.title}\n   - Description: ${agent.description || 'No description'}`;
+      })
       .join('\n\n');
 
     // Create routing prompt

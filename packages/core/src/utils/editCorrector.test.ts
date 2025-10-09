@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Mock } from 'vitest';
 import { vi, describe, it, expect, beforeEach, type Mocked } from 'vitest';
 import * as fs from 'node:fs';

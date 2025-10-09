@@ -1,7 +1,7 @@
 /**
  * @license
- * Copyright 2025 Google LLC
- * SPDX-License-Identifier: Apache-2.0
+ * Copyright 2025 Gemini CLI
+ * SPDX-License-Identifier: MIT
  */
 
 import type { Config } from '../config/config.js';
@@ -479,12 +479,12 @@ export class AgentExecutor {
   /**
    * Build handoff tools for an agent (transfer_to_* functions)
    */
-  private buildHandoffTools(agent: AgentDefinition): Array<import('../adapters/base/types.js').ToolDefinition> {
+  private buildHandoffTools(agent: AgentDefinition): import('../adapters/base/types.js').ToolDefinition[] {
     if (!agent.handoffs || agent.handoffs.length === 0) {
       return [];
     }
 
-    const handoffTools: Array<import('../adapters/base/types.js').ToolDefinition> = [];
+    const handoffTools: import('../adapters/base/types.js').ToolDefinition[] = [];
 
     for (const handoff of agent.handoffs) {
       handoffTools.push({
@@ -543,8 +543,8 @@ export class AgentExecutor {
   /**
    * Convert tool names to ToolDefinition format
    */
-  private getToolDefinitions(toolNames: string[]): Array<import('../adapters/base/types.js').ToolDefinition> {
-    const definitions: Array<import('../adapters/base/types.js').ToolDefinition> = [];
+  private getToolDefinitions(toolNames: string[]): import('../adapters/base/types.js').ToolDefinition[] {
+    const definitions: import('../adapters/base/types.js').ToolDefinition[] = [];
 
     for (const toolName of toolNames) {
       const tool = this.toolRegistry.getTool(toolName);

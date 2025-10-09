@@ -32,12 +32,12 @@ export enum ErrorCategory {
 export class ModelAdapterError extends Error {
   constructor(
     message: string,
-    readonly provider: ModelProvider | string,
-    readonly category: ErrorCategory = ErrorCategory.UNKNOWN,
-    readonly code?: string,
-    readonly statusCode?: number,
-    readonly originalError?: Error,
-    readonly retryable: boolean = false
+    public readonly provider: ModelProvider | string,
+    public readonly category: ErrorCategory = ErrorCategory.UNKNOWN,
+    public readonly code?: string,
+    public readonly statusCode?: number,
+    public readonly originalError?: Error,
+    public readonly retryable: boolean = false
   ) {
     super(message);
     this.name = 'ModelAdapterError';

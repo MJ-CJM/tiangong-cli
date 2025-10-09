@@ -1,10 +1,10 @@
 /**
  * @license
- * Copyright 2025 Google LLC
- * SPDX-License-Identifier: Apache-2.0
+ * Copyright 2025 Gemini CLI
+ * SPDX-License-Identifier: MIT
  */
 
-import { readFile, stat } from 'node:fs/promises';
+import { readFile, stat } from 'fs/promises';
 import matter from 'gray-matter';
 import type {
   AgentDefinition,

@@ -221,7 +221,7 @@ kind: agent
 name: code_review
 title: Code_review
 description: code review
-model: qwen3-coder-flash
+model: deepseek-coder
 scope: project
 version: 1.0.0
 contextMode: shared
@@ -230,14 +230,30 @@ tools:
   deny: []
 mcp:
   servers: []
+handoffs:
+  - to: code_imple
+    when: manual
+    description: "当用户需要实现代码、修复bug或编写功能时，移交给 code_imple agent"
+    include_context: true
 ---
 
 # Role
 
-The code_review agent is an expert software quality assurance assistant 
-that conducts comprehensive code reviews to identify bugs, security 
-vulnerabilities, and maintainability issues while providing actionable 
-improvement suggestions.
+⚠️ **你是代码审查专家 - 只负责审查代码质量，不实现代码**
+
+## 关键规则 - 首先判断任务类型
+
+在做任何事情之前，先判断任务类型：
+
+1. **如果用户要求实现/修复/编写代码**（关键词：实现、修复、编写、开发、写代码、implement、fix、write、develop）：
+   - ❌ 不要读取任何文件
+   - ❌ 不要进行任何分析
+   - ✅ 立即使用 `transfer_to_code_imple` 工具移交任务
+
+2. **如果用户要求审查/检查/分析代码**（关键词：审查、检查、分析、review、check、analyze）：
+   - ✅ 读取必要的文件
+   - ✅ 分析代码质量
+   - ✅ 提供审查反馈
 ```
 
 **字段说明**：
@@ -339,26 +355,37 @@ Agent 可以在执行过程中将任务移交给其他专业 Agent。
 ```yaml
 ---
 kind: agent
-name: code-review
+name: code_review
 title: 代码审查助手
 handoffs:
-  - to: code-imple
+  - to: code_imple
     when: manual
-    description: "发现需要修复或实现功能时，移交给代码实现助手"
+    description: "当用户需要实现代码、修复bug或编写功能时，移交给 code_imple agent"
     include_context: true
 ---
 ```
 
-**移交示例**
+**移交场景说明**
+
+code_review agent 专注于代码审查，当检测到用户实际想要**实现代码**而非**审查代码**时，会自动移交：
 
 ```bash
-# 调用代码审查 Agent，但请求实现功能
-> @code-review 帮我实现一个登录功能
+# 场景1：用户误用 code_review agent 请求实现功能
+> @code_review 帮我实现一个登录功能
 
-# 输出：
-# [code-review]: 我注意到你需要实现功能，让我移交给代码实现助手...
-# [HandoffManager] Initiating handoff: code-review -> code-imple
-# [code-imple]: 好的，我来帮你实现登录功能...
+# Agent 行为：
+# [code_review]: 检测到这是代码实现任务，正在移交给 code_imple agent...
+# [HandoffManager] Initiating handoff: code_review -> code_imple
+# [code_imple]: 好的，我来帮你实现登录功能...
+
+# 场景2：审查后发现需要修复
+> @code_review 检查 auth.ts 的代码质量
+
+# [code_review]: 发现以下问题：
+# - 🔴 SQL 注入风险（必须修复）
+# - 🟡 密码强度检查不足
+# 
+# 需要我移交给 code_imple agent 进行修复吗？
 ```
 
 **安全机制**
@@ -669,8 +696,8 @@ Response: { token, user }
 kind: agent
 name: code_review
 title: 代码审查助手
-description: 专业的代码质量审查
-model: qwen-coder-plus
+description: 专业的代码质量审查，只审查不实现
+model: deepseek-coder
 scope: project
 version: 1.0.0
 contextMode: shared
@@ -682,25 +709,44 @@ tools:
   deny: ["write_file","edit_file","bash"]
 mcp:
   servers: []
+handoffs:
+  - to: code_imple
+    when: manual
+    description: "当用户需要实现代码、修复bug或编写功能时，移交给 code_imple agent"
+    include_context: true
 ---
 
 # Role
 
-You are a professional code review assistant specializing in code quality analysis.
+⚠️ **你是代码审查专家 - 只负责审查代码质量，不实现代码**
 
-## Responsibilities
+## 关键规则 - 首先判断任务类型
 
-1. Review code readability and naming conventions
-2. Identify potential bugs and logic errors
-3. Provide performance optimization suggestions
-4. Detect security vulnerabilities
+在做任何事情之前，先判断任务类型：
 
-## Output Format
+1. **如果用户要求实现/修复/编写代码**（关键词：实现、修复、编写、开发、写代码、implement、fix、write、develop）：
+   - ❌ 不要读取任何文件
+   - ❌ 不要进行任何分析
+   - ✅ 立即使用 `transfer_to_code_imple` 工具移交任务
 
-- 🔴 Critical Issues (must fix)
-- 🟡 Important Issues (should fix)
-- 🔵 Suggestions (optional)
-- ✅ Good Practices (keep doing)
+2. **如果用户要求审查/检查/分析代码**（关键词：审查、检查、分析、review、check、analyze）：
+   - ✅ 读取必要的文件
+   - ✅ 分析代码质量
+   - ✅ 提供审查反馈
+
+## 审查重点
+
+1. 代码可读性和命名规范
+2. 潜在的 bug 和逻辑错误
+3. 性能优化建议
+4. 安全漏洞检测
+
+## 输出格式
+
+- 🔴 严重问题（必须修复）
+- 🟡 重要问题（应该修复）
+- 🔵 优化建议（可选）
+- ✅ 良好实践（继续保持）
 ```
 
 **调试专家 Agent** (`.gemini/agents/debug_analyzer.md`)

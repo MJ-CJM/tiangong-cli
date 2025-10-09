@@ -1,11 +1,10 @@
 /**
  * @license
- * Copyright 2025 Google LLC
- * SPDX-License-Identifier: Apache-2.0
+ * Copyright 2025 Gemini CLI
+ * SPDX-License-Identifier: MIT
  */
 
-import type React from 'react';
-import { useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Box, Text } from 'ink';
 import { theme } from '../semantic-colors.js';
 import { useKeypress } from '../hooks/useKeypress.js';

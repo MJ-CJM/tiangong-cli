@@ -59,7 +59,7 @@ export class ModelAdapterRegistry {
   /**
    * Get all registered providers
    */
-  getRegisteredProviders(): Array<ModelProvider | string> {
+  getRegisteredProviders(): (ModelProvider | string)[] {
     return Array.from(this.adapters.keys());
   }
 

@@ -1,13 +1,13 @@
 /**
  * @license
- * Copyright 2025 Google LLC
- * SPDX-License-Identifier: Apache-2.0
+ * Copyright 2025 Gemini CLI
+ * SPDX-License-Identifier: MIT
  */
 
-import { readdir, mkdir, writeFile, unlink } from 'node:fs/promises';
-import { join } from 'node:path';
-import { homedir } from 'node:os';
-import { existsSync } from 'node:fs';
+import { readdir, mkdir, writeFile, unlink } from 'fs/promises';
+import { join } from 'path';
+import { homedir } from 'os';
+import { existsSync } from 'fs';
 import { AgentParser } from './AgentParser.js';
 import { AgentValidator } from './AgentValidator.js';
 import type {

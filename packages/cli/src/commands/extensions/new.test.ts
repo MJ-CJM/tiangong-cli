@@ -22,7 +22,7 @@ describe('extensions new command', () => {
       { name: 'custom-commands', isDirectory: () => true },
       { name: 'mcp-server', isDirectory: () => true },
     ];
-     
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockedFs.readdir.mockResolvedValue(fakeFiles as any);
   });
 

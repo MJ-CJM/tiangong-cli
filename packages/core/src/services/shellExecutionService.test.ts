@@ -221,9 +221,9 @@ describe('ShellExecutionService', () => {
   describe('pty interaction', () => {
     beforeEach(() => {
       vi.spyOn(ShellExecutionService['activePtys'], 'get').mockReturnValue({
-         
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ptyProcess: mockPtyProcess as any,
-         
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         headlessTerminal: mockHeadlessTerminal as any,
       });
     });

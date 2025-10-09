@@ -212,7 +212,7 @@ export class CustomAdapter extends AbstractModelClient {
     if (text) {
       content.push({
         type: 'text',
-        text: text
+        text
       });
     }
 

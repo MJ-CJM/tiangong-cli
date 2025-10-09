@@ -302,7 +302,7 @@ describe('MemoryTool', () => {
       memoryTool = new MemoryTool();
       // Clear the allowlist before each test
       const invocation = memoryTool.build({ fact: 'mock-fact' });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       (invocation.constructor as any).allowlist.clear();
       // Mock fs.readFile to return empty string (file doesn't exist)
       vi.mocked(fs.readFile).mockResolvedValue('');
@@ -340,7 +340,7 @@ describe('MemoryTool', () => {
 
       const invocation = memoryTool.build(params);
       // Add the memory file to the allowlist
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       (invocation.constructor as any).allowlist.add(memoryFilePath);
 
       const result = await invocation.shouldConfirmExecute(mockAbortSignal);
@@ -368,7 +368,7 @@ describe('MemoryTool', () => {
 
         // Check that the memory file was added to the allowlist
         expect(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+           
           (invocation.constructor as any).allowlist.has(memoryFilePath),
         ).toBe(true);
       }
@@ -391,7 +391,7 @@ describe('MemoryTool', () => {
       if (result && result.type === 'edit') {
         // Simulate the onConfirm callback with different outcomes
         await result.onConfirm(ToolConfirmationOutcome.ProceedOnce);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         const allowlist = (invocation.constructor as any).allowlist;
         expect(allowlist.has(memoryFilePath)).toBe(false);
 

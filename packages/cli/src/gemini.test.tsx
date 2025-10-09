@@ -168,9 +168,9 @@ describe('gemini.tsx main function kitty protocol', () => {
   >;
 
   beforeEach(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     if (!(process.stdin as any).setRawMode) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       (process.stdin as any).setRawMode = vi.fn();
     }
     setRawModeSpy = vi.spyOn(process.stdin, 'setRawMode');

@@ -321,7 +321,7 @@ describe('mcp-client', () => {
         );
 
         expect(transport).toBeInstanceOf(StreamableHTTPClientTransport);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         const authProvider = (transport as any)._authProvider;
         expect(authProvider).toBeInstanceOf(GoogleCredentialProvider);
       });
@@ -340,7 +340,7 @@ describe('mcp-client', () => {
         );
 
         expect(transport).toBeInstanceOf(SSEClientTransport);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         const authProvider = (transport as any)._authProvider;
         expect(authProvider).toBeInstanceOf(GoogleCredentialProvider);
       });

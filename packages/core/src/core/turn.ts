@@ -355,7 +355,7 @@ export class Turn {
     const name = fnCall.name || 'undefined_tool_name';
 
     // Enhanced args validation to prevent empty object issues
-    let args = (fnCall.args || {}) as Record<string, unknown>;
+    const args = (fnCall.args || {}) as Record<string, unknown>;
 
     // If args is an empty object and we have a known tool that requires parameters,
     // log a warning and still proceed (the tool's validation will catch this)

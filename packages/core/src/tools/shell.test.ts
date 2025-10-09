@@ -393,7 +393,7 @@ describe('ShellTool', () => {
       expect(confirmation).not.toBe(false);
       expect(confirmation && confirmation.type).toBe('exec');
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       await (confirmation as any).onConfirm(
         ToolConfirmationOutcome.ProceedAlways,
       );

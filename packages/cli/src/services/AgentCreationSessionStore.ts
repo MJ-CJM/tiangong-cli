@@ -1,10 +1,10 @@
 /**
  * @license
- * Copyright 2025 Gemini CLI
- * SPDX-License-Identifier: MIT
+ * Copyright 2025 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
  */
 
-import { AgentCreationSession } from '@google/gemini-cli-core';
+import type { AgentCreationSession } from '@google/gemini-cli-core';
 
 /**
  * In-memory storage for agent creation sessions

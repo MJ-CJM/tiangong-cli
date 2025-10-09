@@ -35,7 +35,7 @@ interface CustomMatchers<R = unknown> {
 }
 
 declare module 'vitest' {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-empty-object-type
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
   interface Matchers<T = any> extends CustomMatchers<T> {}
 }
 
@@ -397,7 +397,7 @@ describe('ClearcutLogger', () => {
       const { logger } = setup();
       // Spy on flushToClearcut to prevent it from clearing the queue
       const flushSpy = vi
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         .spyOn(logger!, 'flushToClearcut' as any)
         .mockResolvedValue({ nextRequestWaitMs: 0 });
 

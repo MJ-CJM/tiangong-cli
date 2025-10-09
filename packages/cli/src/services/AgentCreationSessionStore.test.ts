@@ -1,7 +1,7 @@
 /**
  * @license
- * Copyright 2025 Gemini CLI
- * SPDX-License-Identifier: MIT
+ * Copyright 2025 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';

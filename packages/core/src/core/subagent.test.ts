@@ -144,7 +144,7 @@ describe('subagent.ts', () => {
       ]);
       vi.mocked(createContentGenerator).mockResolvedValue({
         getGenerativeModel: vi.fn(),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
       } as any);
 
       mockSendMessageStream = vi.fn();
@@ -202,7 +202,7 @@ describe('subagent.ts', () => {
         };
 
         const { config } = await createMockConfig({
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+           
           getTool: vi.fn().mockReturnValue(mockTool as any),
         });
 
@@ -232,7 +232,7 @@ describe('subagent.ts', () => {
           }),
         };
         const { config } = await createMockConfig({
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+           
           getTool: vi.fn().mockReturnValue(mockTool as any),
         });
 
@@ -779,7 +779,7 @@ describe('subagent.ts', () => {
         const streamPromise = new Promise<
           AsyncGenerator<unknown, void, unknown>
         >((resolve) => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+           
           resolveStream = resolve as any;
         });
 
@@ -800,7 +800,7 @@ describe('subagent.ts', () => {
         await vi.advanceTimersByTimeAsync(6 * 60 * 1000);
 
         // Now resolve the stream. The model returns 'stop'.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         resolveStream!(createMockStream(['stop'])() as any);
 
         await runPromise;

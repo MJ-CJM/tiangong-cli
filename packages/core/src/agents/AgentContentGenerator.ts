@@ -1,7 +1,7 @@
 /**
  * @license
- * Copyright 2025 Gemini CLI
- * SPDX-License-Identifier: MIT
+ * Copyright 2025 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 import type { ModelService } from '../services/modelService.js';
@@ -95,7 +95,7 @@ Generate the content now:`;
     const constraints: string[] = [];
 
     let currentSection: 'role' | 'responsibilities' | 'guidelines' | 'constraints' | null = null;
-    let roleLines: string[] = [];
+    const roleLines: string[] = [];
 
     for (const line of lines) {
       const trimmed = line.trim();

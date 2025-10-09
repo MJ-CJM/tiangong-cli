@@ -114,7 +114,7 @@ const createMockUIActions = (): UIActions =>
     setShellModeActive: vi.fn(),
     onEscapePromptChange: vi.fn(),
     vimHandleInput: vi.fn(),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
   }) as any;
 
 const createMockConfig = (overrides = {}) => ({
@@ -135,7 +135,7 @@ const createMockSettings = (merged = {}) => ({
   },
 });
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 const renderComposer = (
   uiState: UIState,
   settings = createMockSettings(),
@@ -153,7 +153,7 @@ const renderComposer = (
       </SettingsContext.Provider>
     </ConfigContext.Provider>,
   );
-/* eslint-enable @typescript-eslint/no-explicit-any */
+ 
 
 describe('Composer', () => {
   describe('Footer Display Settings', () => {
@@ -185,7 +185,7 @@ describe('Composer', () => {
         sessionStats: {
           sessionId: 'test-session',
           sessionStartTime: new Date(),
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+           
           metrics: {} as any,
           lastPromptTokenCount: 150,
           promptCount: 5,
@@ -205,7 +205,7 @@ describe('Composer', () => {
       vi.mocked(useVimMode).mockReturnValueOnce({
         vimEnabled: true,
         vimMode: 'INSERT',
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
       } as any);
 
       const { lastFrame } = renderComposer(uiState, settings, config);
@@ -410,7 +410,7 @@ describe('Composer', () => {
         showErrorDetails: true,
         filteredConsoleMessages: [
           { level: 'error', message: 'Test error', timestamp: new Date() },
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+           
         ] as any,
       });
 

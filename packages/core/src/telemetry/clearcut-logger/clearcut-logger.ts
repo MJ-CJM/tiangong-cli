@@ -136,6 +136,11 @@ const MAX_EVENTS = 1000;
  */
 const MAX_RETRY_EVENTS = 100;
 
+/**
+ * Timeout for clearcut fetch requests in milliseconds
+ */
+const CLEARCUT_FETCH_TIMEOUT_MS = 3000;
+
 // Singleton class for batch posting log events to Clearcut. When a new event comes in, the elapsed time
 // is checked and events are flushed to Clearcut if at least a minute has passed since the last flush.
 export class ClearcutLogger {
@@ -285,14 +290,20 @@ export class ClearcutLogger {
     let result: LogResponse = {};
 
     try {
+      // Create an AbortController with timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), CLEARCUT_FETCH_TIMEOUT_MS);
+
       const response = await fetch(CLEARCUT_URL, {
         method: 'POST',
         body: safeJsonStringify(request),
         headers: {
           'Content-Type': 'application/json',
         },
+        signal: controller.signal,
       });
 
+      clearTimeout(timeoutId);
       const responseBody = await response.text();
 
       if (response.status >= 200 && response.status < 300) {

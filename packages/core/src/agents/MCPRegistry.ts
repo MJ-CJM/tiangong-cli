@@ -5,7 +5,7 @@
  */
 
 import type { MCPServerConfig } from '../config/config.js';
-import type { AgentDefinition } from './types.js';
+import type { TiangongAgentDefinition as AgentDefinition } from './types.js';
 
 /**
  * Registry for MCP servers available to Agents

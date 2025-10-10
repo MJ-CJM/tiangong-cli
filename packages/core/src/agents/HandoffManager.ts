@@ -7,7 +7,7 @@
 import * as crypto from 'node:crypto';
 import type { AgentManager } from './AgentManager.js';
 import type {
-  AgentDefinition,
+  TiangongAgentDefinition,
   HandoffContext,
   HandoffConfig,
 } from './types.js';
@@ -180,7 +180,7 @@ export class HandoffManager {
    * Find handoff configuration from source agent to target agent
    */
   private findHandoffConfig(
-    sourceAgent: AgentDefinition,
+    sourceAgent: TiangongAgentDefinition,
     toAgent: string
   ): HandoffConfig | null {
     if (!sourceAgent.handoffs) {

@@ -51,7 +51,8 @@
     "release:version": "node scripts/version.js",
     "telemetry": "node scripts/telemetry.js",
     "check:lockfile": "node scripts/check-lockfile.js",
-    "clean": "node scripts/clean.js"
+    "clean": "node scripts/clean.js",
+    "pre-commit": "node scripts/pre-commit.js"
   },
   "bin": {
     "gemini": "bundle/gemini.js"

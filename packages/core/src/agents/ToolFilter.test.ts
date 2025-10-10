@@ -6,7 +6,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { ToolFilter } from './ToolFilter.js';
-import type { AgentDefinition } from './types.js';
+import type { TiangongAgentDefinition as AgentDefinition } from './types.js';
 
 describe('ToolFilter', () => {
   const filter = new ToolFilter();

@@ -9,7 +9,7 @@ import { AgentExecutor } from './AgentExecutor.js';
 import type { Config } from '../config/config.js';
 import type { ModelService } from '../services/modelService.js';
 import type { ToolRegistry } from '../tools/tool-registry.js';
-import type { AgentDefinition } from './types.js';
+import type { TiangongAgentDefinition as AgentDefinition } from './types.js';
 
 /**
  * Integration tests for routing and handoff functionality

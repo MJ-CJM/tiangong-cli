@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+import type { TiangongAgentDefinition } from './types.js';
 import type { Config } from '../config/config.js';
 import type { ModelService } from '../services/modelService.js';
 import type { ToolRegistry } from '../tools/tool-registry.js';
@@ -19,18 +20,19 @@ import { MCPRegistry } from './MCPRegistry.js';
 import { Router } from './Router.js';
 import { HandoffManager } from './HandoffManager.js';
 import type {
-  AgentDefinition,
   AgentExecuteOptions,
   AgentExecuteResponse,
   AgentRuntime,
   HandoffContext,
   RoutingConfig,
+  AgentContext,
 } from './types.js';
 import { HandoffError } from './types.js';
 
 /**
  * Executes Agent conversations with isolated contexts and tool filtering
  */
+
 export class AgentExecutor {
   private agentManager: AgentManager;
   private contextManager: ContextManager;
@@ -53,6 +55,7 @@ export class AgentExecutor {
   /**
    * Initialize the executor by loading agents and MCP servers
    */
+
   async initialize(routingConfig?: Partial<RoutingConfig>): Promise<void> {
     // Load agents
     await this.agentManager.loadAgents();
@@ -85,6 +88,7 @@ export class AgentExecutor {
    * @param options - Execution options
    * @returns Agent response
    */
+
   async execute(
     agentName: string,
     prompt: string,
@@ -374,6 +378,7 @@ export class AgentExecutor {
    * @param options - Execution options
    * @returns Agent response with routing info
    */
+
   async executeWithRouting(
     prompt: string,
     options: AgentExecuteOptions = {}
@@ -412,6 +417,7 @@ export class AgentExecutor {
    * @param options - Execution options
    * @returns Agent response
    */
+
   async executeWithHandoff(
     agentName: string,
     handoffContext: HandoffContext,
@@ -445,6 +451,7 @@ export class AgentExecutor {
   /**
    * Build prompt for handoff including context from previous agent
    */
+
   private buildHandoffPrompt(handoffContext: HandoffContext): string {
     let prompt = `[Handoff from ${handoffContext.from_agent}]\n\n`;
     prompt += `Reason: ${handoffContext.reason}\n\n`;
@@ -479,7 +486,8 @@ export class AgentExecutor {
   /**
    * Build handoff tools for an agent (transfer_to_* functions)
    */
-  private buildHandoffTools(agent: AgentDefinition): import('../adapters/base/types.js').ToolDefinition[] {
+
+  private buildHandoffTools(agent: TiangongAgentDefinition): import('../adapters/base/types.js').ToolDefinition[] {
     if (!agent.handoffs || agent.handoffs.length === 0) {
       return [];
     }
@@ -515,6 +523,7 @@ export class AgentExecutor {
   /**
    * Check if a tool call is a handoff (transfer_to_*)
    */
+
   private isHandoffTool(toolName: string): boolean {
     return toolName.startsWith('transfer_to_');
   }
@@ -522,6 +531,7 @@ export class AgentExecutor {
   /**
    * Extract target agent name from handoff tool name
    */
+
   private extractHandoffTarget(toolName: string): string {
     return toolName.replace('transfer_to_', '');
   }
@@ -529,6 +539,7 @@ export class AgentExecutor {
   /**
    * Get router instance (for CLI commands)
    */
+
   getRouter(): Router | null {
     return this.router;
   }
@@ -536,6 +547,7 @@ export class AgentExecutor {
   /**
    * Get handoff manager instance (for CLI commands)
    */
+
   getHandoffManager(): HandoffManager | null {
     return this.handoffManager;
   }
@@ -543,6 +555,7 @@ export class AgentExecutor {
   /**
    * Convert tool names to ToolDefinition format
    */
+
   private getToolDefinitions(toolNames: string[]): import('../adapters/base/types.js').ToolDefinition[] {
     const definitions: import('../adapters/base/types.js').ToolDefinition[] = [];
 
@@ -568,7 +581,8 @@ export class AgentExecutor {
   /**
    * Build runtime state for an agent
    */
-  private async buildRuntime(agent: AgentDefinition): Promise<AgentRuntime> {
+
+  private async buildRuntime(agent: TiangongAgentDefinition): Promise<AgentRuntime> {
     // Get all available tools
     const allToolNames = this.toolRegistry.getAllToolNames();
     console.log(`[AgentExecutor] Agent: ${agent.name}`);
@@ -605,6 +619,7 @@ export class AgentExecutor {
    * @param allowedServers - Server names the agent is allowed to use
    * @returns Filtered tool names
    */
+
   private filterMCPTools(allTools: string[], allowedServers: string[]): string[] {
     // If no MCP servers configured, allow all non-MCP tools
     if (allowedServers.length === 0) {
@@ -642,6 +657,7 @@ export class AgentExecutor {
   /**
    * Get agent manager (for CLI commands)
    */
+
   getAgentManager(): AgentManager {
     return this.agentManager;
   }
@@ -649,6 +665,7 @@ export class AgentExecutor {
   /**
    * Get context manager (for debugging/inspection)
    */
+
   getContextManager(): ContextManager {
     return this.contextManager;
   }
@@ -658,6 +675,7 @@ export class AgentExecutor {
    *
    * @param agentName - Agent name
    */
+
   clearContext(agentName: string): void {
     this.contextManager.clearHistory(agentName);
   }
@@ -668,6 +686,7 @@ export class AgentExecutor {
    * @param agentName - Agent name
    * @returns Validation result with errors/warnings
    */
+
   validateAgent(agentName: string): {
     valid: boolean;
     errors: string[];
@@ -713,6 +732,7 @@ export class AgentExecutor {
    * @param agentName - Agent name
    * @returns Runtime info or null
    */
+
   async getRuntimeInfo(agentName: string): Promise<AgentRuntime | null> {
     const agent = this.agentManager.getAgent(agentName);
     if (!agent) {
@@ -730,10 +750,11 @@ export class AgentExecutor {
    * @param context - Agent context
    * @returns Enhanced system message
    */
+
   private buildSystemMessage(
-    agent: import('./types.js').AgentDefinition,
+    agent: TiangongAgentDefinition,
     contextMode: 'isolated' | 'shared',
-    context: import('./types.js').AgentContext
+    context: AgentContext
   ): string {
     let systemMessage = agent.systemPrompt || '';
 

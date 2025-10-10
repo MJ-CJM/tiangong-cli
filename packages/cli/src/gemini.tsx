@@ -248,15 +248,17 @@ export async function main() {
 
   // Set a default auth type if one isn't set.
   if (!settings.merged.security?.auth?.selectedType) {
-    const customModels = config.getCustomModels?.() ?? {};
-    const activeModel = config.getModel?.();
-    if (activeModel && customModels[activeModel]) {
-      settings.setValue(
-        SettingScope.User,
-        'selectedAuthType',
-        AuthType.USE_CUSTOM,
-      );
-    } else if (process.env['CLOUD_SHELL'] === 'true') {
+    // Note: config is not available yet at this point in startup
+    // const customModels = config.getCustomModels?.() ?? {};
+    // const activeModel = config.getModel?.();
+    // if (activeModel && customModels[activeModel]) {
+    //   settings.setValue(
+    //     SettingScope.User,
+    //     'selectedAuthType',
+    //     AuthType.USE_CUSTOM,
+    //   );
+    // } else
+    if (process.env['CLOUD_SHELL'] === 'true') {
       settings.setValue(
         SettingScope.User,
         'selectedAuthType',

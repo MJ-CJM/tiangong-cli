@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+import type { TiangongAgentDefinition } from './types.js';
 import { readdir, mkdir, writeFile, unlink } from 'fs/promises';
 import { join } from 'path';
 import { homedir } from 'os';
@@ -11,7 +12,6 @@ import { existsSync } from 'fs';
 import { AgentParser } from './AgentParser.js';
 import { AgentValidator } from './AgentValidator.js';
 import type {
-  AgentDefinition,
   AgentCreateOptions,
   AgentListItem,
 } from './types.js';
@@ -19,10 +19,11 @@ import type {
 /**
  * Manages Agent definitions (load, create, list, delete, validate)
  */
+
 export class AgentManager {
   private parser: AgentParser;
   private validator: AgentValidator;
-  private agents: Map<string, AgentDefinition> = new Map();
+  private agents: Map<string, TiangongAgentDefinition> = new Map();
 
   constructor() {
     this.parser = new AgentParser();
@@ -32,6 +33,7 @@ export class AgentManager {
   /**
    * Get global agents directory path
    */
+
   static getGlobalAgentsDir(): string {
     return join(homedir(), '.gemini', 'agents');
   }
@@ -39,6 +41,7 @@ export class AgentManager {
   /**
    * Get project agents directory path
    */
+
   static getProjectAgentsDir(projectRoot?: string): string {
     const root = projectRoot || process.cwd();
     return join(root, '.gemini', 'agents');
@@ -47,6 +50,7 @@ export class AgentManager {
   /**
    * Get templates directory path
    */
+
   static getTemplatesDir(): string {
     return join(this.getGlobalAgentsDir(), 'templates');
   }
@@ -57,6 +61,7 @@ export class AgentManager {
    * @param projectRoot - Optional project root (defaults to cwd)
    * @returns Number of agents loaded
    */
+
   async loadAgents(projectRoot?: string): Promise<number> {
     this.agents.clear();
 
@@ -79,6 +84,7 @@ export class AgentManager {
   /**
    * Load agents from a specific directory
    */
+
   private async loadAgentsFromDir(
     dir: string,
     scope: 'global' | 'project'
@@ -119,7 +125,8 @@ export class AgentManager {
    * @param name - Agent name
    * @returns Agent definition or null
    */
-  getAgent(name: string): AgentDefinition | null {
+
+  getAgent(name: string): TiangongAgentDefinition | null {
     return this.agents.get(name) || null;
   }
 
@@ -128,6 +135,7 @@ export class AgentManager {
    *
    * @returns Array of agent list items
    */
+
   listAgents(): AgentListItem[] {
     return Array.from(this.agents.values()).map((def) => ({
       name: def.name,
@@ -146,7 +154,8 @@ export class AgentManager {
    * @param options - Agent creation options
    * @returns Created agent definition
    */
-  async createAgent(options: AgentCreateOptions): Promise<AgentDefinition> {
+
+  async createAgent(options: AgentCreateOptions): Promise<TiangongAgentDefinition> {
     const {
       name,
       title,
@@ -242,6 +251,7 @@ export class AgentManager {
   /**
    * Build agent file content from parameters
    */
+
   private buildAgentContent(params: {
     name: string;
     title: string;
@@ -322,6 +332,7 @@ You are ${title}.
    * @param name - Agent name to delete
    * @returns True if deleted, false if not found
    */
+
   async deleteAgent(name: string): Promise<boolean> {
     const agent = this.agents.get(name);
     if (!agent) {
@@ -347,6 +358,7 @@ You are ${title}.
    * @param availableMCPServers - List of available MCP servers
    * @returns Validation result
    */
+
   validateAgent(
     name: string,
     availableTools?: string[],
@@ -363,6 +375,7 @@ You are ${title}.
   /**
    * Get agent count
    */
+
   getAgentCount(): number {
     return this.agents.size;
   }
@@ -370,6 +383,7 @@ You are ${title}.
   /**
    * Check if an agent exists
    */
+
   hasAgent(name: string): boolean {
     return this.agents.has(name);
   }

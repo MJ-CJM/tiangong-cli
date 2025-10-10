@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { HandoffManager } from './HandoffManager.js';
 import { HandoffError } from './types.js';
 import type { AgentManager } from './AgentManager.js';
-import type { AgentDefinition } from './types.js';
+import type { TiangongAgentDefinition as AgentDefinition } from './types.js';
 import { MessageRole } from '../adapters/base/types.js';
 
 describe('HandoffManager', () => {

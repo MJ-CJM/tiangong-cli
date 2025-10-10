@@ -4,16 +4,17 @@
  * SPDX-License-Identifier: MIT
  */
 
+import type { TiangongAgentDefinition } from './types.js';
 import { readFile, stat } from 'fs/promises';
 import matter from 'gray-matter';
 import type {
-  AgentDefinition,
   AgentFrontMatter,
 } from './types.js';
 
 /**
  * Parses Agent definition files (.md with YAML front-matter)
  */
+
 export class AgentParser {
   /**
    * Parse an agent definition from a .md file
@@ -22,7 +23,8 @@ export class AgentParser {
    * @returns Parsed agent definition
    * @throws Error if file is invalid or parsing fails
    */
-  async parse(filePath: string): Promise<AgentDefinition> {
+
+  async parse(filePath: string): Promise<TiangongAgentDefinition> {
     // Read file
     const content = await readFile(filePath, 'utf-8');
     const fileStats = await stat(filePath);
@@ -51,7 +53,7 @@ export class AgentParser {
     }
 
     // Construct definition
-    const definition: AgentDefinition = {
+    const definition: TiangongAgentDefinition = {
       kind: 'agent',
       name: frontMatter.name,
       title: frontMatter.title,
@@ -80,7 +82,8 @@ export class AgentParser {
    * @param definition - Agent definition to serialize
    * @returns Markdown file content with front-matter
    */
-  serialize(definition: AgentDefinition): string {
+
+  serialize(definition: TiangongAgentDefinition): string {
     // Build front-matter object
     const frontMatter: Record<string, any> = {
       kind: 'agent',
@@ -111,6 +114,7 @@ export class AgentParser {
    * @param filePath - Path to agent .md file
    * @returns Agent name (filename without .md extension)
    */
+
   static extractNameFromPath(filePath: string): string {
     const fileName = filePath.split('/').pop() || '';
     return fileName.replace(/\.md$/, '');
@@ -123,7 +127,8 @@ export class AgentParser {
    * @param definition - Parsed definition
    * @throws Error if name mismatch
    */
-  static validateNameMatch(filePath: string, definition: AgentDefinition): void {
+
+  static validateNameMatch(filePath: string, definition: TiangongAgentDefinition): void {
     const fileBasedName = this.extractNameFromPath(filePath);
     if (fileBasedName !== definition.name) {
       throw new Error(

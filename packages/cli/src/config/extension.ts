@@ -724,7 +724,7 @@ export function toOutputString(
   }
   output += `\n Enabled (User): ${userEnabled}`;
   output += `\n Enabled (Workspace): ${workspaceEnabled}`;
-  if (extension.contextFiles.length > 0) {
+  if (extension.contextFiles && extension.contextFiles.length > 0) {
     output += `\n Context files:`;
     extension.contextFiles.forEach((contextFile) => {
       output += `\n  ${contextFile}`;

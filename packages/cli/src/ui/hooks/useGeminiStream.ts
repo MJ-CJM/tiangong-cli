@@ -142,9 +142,8 @@ export const useGeminiStream = (
 
           // Record tool calls with full metadata before sending responses.
           try {
-            const currentModel =
-              config.getGeminiClient().getCurrentSequenceModel() ??
-              config.getModel();
+            // Note: getCurrentSequenceModel() is not yet implemented
+            const currentModel = config.getModel();
             config
               .getGeminiClient()
               .getChat()

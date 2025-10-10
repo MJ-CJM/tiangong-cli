@@ -7,7 +7,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { RuleRouter } from './RuleRouter.js';
 import type { AgentManager } from './AgentManager.js';
-import type { AgentDefinition } from './types.js';
+import type { TiangongAgentDefinition as AgentDefinition } from './types.js';
 
 describe('RuleRouter', () => {
   let mockAgentManager: AgentManager;

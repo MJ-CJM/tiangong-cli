@@ -5,7 +5,7 @@
  */
 
 import type { AgentManager } from './AgentManager.js';
-import type { AgentDefinition, RoutingScore } from './types.js';
+import type { TiangongAgentDefinition as AgentDefinition, RoutingScore } from './types.js';
 
 /**
  * Rule-based router using keyword and regex pattern matching

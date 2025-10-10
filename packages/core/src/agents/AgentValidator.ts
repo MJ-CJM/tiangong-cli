@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
+import type { TiangongAgentDefinition } from './types.js';
 import AjvPkg from 'ajv';
 import type { ErrorObject } from 'ajv';
 import * as addFormats from 'ajv-formats';
 import type {
-  AgentDefinition,
   AgentValidationResult,
 } from './types.js';
 
@@ -21,6 +21,7 @@ const addFormatsFunc = (addFormats as any).default || addFormats;
 /**
  * JSON Schema for Agent front-matter validation
  */
+
 const AGENT_SCHEMA = {
   type: 'object',
   required: ['kind', 'name', 'title'],
@@ -148,6 +149,7 @@ const AGENT_SCHEMA = {
 /**
  * Validates Agent definitions against schema and business rules
  */
+
 export class AgentValidator {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private ajv: any;
@@ -165,8 +167,9 @@ export class AgentValidator {
    * @param availableMCPServers - List of available MCP server names
    * @returns Validation result with errors and warnings
    */
+
   validate(
-    definition: Partial<AgentDefinition>,
+    definition: Partial<TiangongAgentDefinition>,
     availableTools?: string[],
     availableMCPServers?: string[]
   ): AgentValidationResult {
@@ -265,6 +268,7 @@ export class AgentValidator {
   /**
    * Format Ajv validation errors into readable messages
    */
+
   private formatAjvErrors(errors: ErrorObject[]): string[] {
     return errors.map((err) => {
       const path = err.instancePath || 'root';
@@ -294,7 +298,8 @@ export class AgentValidator {
    * @param definition - Agent definition to validate
    * @throws Error if validation fails
    */
-  validateOrThrow(definition: Partial<AgentDefinition>): void {
+
+  validateOrThrow(definition: Partial<TiangongAgentDefinition>): void {
     const result = this.validate(definition);
     if (!result.valid) {
       throw new Error(`Agent validation failed:\n${result.errors.join('\n')}`);

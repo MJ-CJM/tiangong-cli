@@ -109,6 +109,7 @@ export interface TelemetrySettings {
   otlpProtocol?: 'grpc' | 'http';
   logPrompts?: boolean;
   outfile?: string;
+  useCollector?: boolean;
 }
 
 export interface OutputSettings {
@@ -144,14 +145,24 @@ export interface ActiveModelConfig {
   model: string;
 }
 
+export interface ExtensionInstallMetadata {
+  source: string;
+  type: 'git' | 'local' | 'link' | 'github-release';
+  releaseTag?: string; // Only present for github-release installs.
+  ref?: string;
+  autoUpdate?: boolean;
+  allowPreRelease?: boolean;
+}
+
 export interface GeminiCLIExtension {
   name: string;
   version: string;
   isActive: boolean;
   path: string;
-  source?: string;
-  type?: 'git' | 'local' | 'link';
-  ref?: string;
+  installMetadata?: ExtensionInstallMetadata;
+  mcpServers?: Record<string, MCPServerConfig>;
+  contextFiles?: string[];
+  excludeTools?: string[];
 }
 
 export interface FileFilteringOptions {
@@ -197,12 +208,16 @@ export class MCPServerConfig {
     // OAuth configuration
     readonly oauth?: MCPOAuthConfig,
     readonly authProviderType?: AuthProviderType,
+    // Service Account Impersonation
+    readonly targetAudience?: string,
+    readonly targetServiceAccount?: string,
   ) {}
 }
 
 export enum AuthProviderType {
   DYNAMIC_DISCOVERY = 'dynamic_discovery',
   GOOGLE_CREDENTIALS = 'google_credentials',
+  SERVICE_ACCOUNT_IMPERSONATION = 'service_account_impersonation',
 }
 
 export interface SandboxConfig {
@@ -227,6 +242,7 @@ export interface ConfigParameters {
   mcpServers?: Record<string, MCPServerConfig>;
   userMemory?: string;
   geminiMdFileCount?: number;
+  geminiMdFilePaths?: string[];
   approvalMode?: ApprovalMode;
   showMemoryUsage?: boolean;
   contextFileName?: string | string[];
@@ -277,6 +293,10 @@ export interface ConfigParameters {
   useModelRouter?: boolean;
   modelConfig?: ActiveModelConfig;
   modelProviders?: ModelProvidersSettings;
+  enableSubagents?: boolean;
+  continueOnFailedApiCall?: boolean;
+  enableInteractiveShell?: boolean;
+  enableMessageBusIntegration?: boolean;
 }
 
 export class Config {
@@ -369,6 +389,11 @@ export class Config {
   private readonly useModelRouter: boolean;
   private modelConfig: ActiveModelConfig | undefined;
   private modelProviders: ModelProvidersSettings;
+  private geminiMdFilePaths: string[];
+  private readonly enableSubagents: boolean;
+  private readonly continueOnFailedApiCall: boolean;
+  private readonly enableInteractiveShell: boolean;
+  private readonly enableMessageBusIntegration: boolean;
 
   constructor(params: ConfigParameters) {
     this.sessionId = params.sessionId;
@@ -466,6 +491,11 @@ export class Config {
     this.outputSettings = {
       format: params.output?.format ?? OutputFormat.TEXT,
     };
+    this.geminiMdFilePaths = params.geminiMdFilePaths ?? [];
+    this.enableSubagents = params.enableSubagents ?? false;
+    this.continueOnFailedApiCall = params.continueOnFailedApiCall ?? false;
+    this.enableInteractiveShell = params.enableInteractiveShell ?? false;
+    this.enableMessageBusIntegration = params.enableMessageBusIntegration ?? false;
 
     if (params.contextFileName) {
       setGeminiMdFilename(params.contextFileName);
@@ -1195,6 +1225,34 @@ export class Config {
 
   getPolicyEngine(): PolicyEngine {
     return this.policyEngine;
+  }
+
+  getGeminiMdFilePaths(): string[] {
+    return this.geminiMdFilePaths;
+  }
+
+  setGeminiMdFilePaths(paths: string[]): void {
+    this.geminiMdFilePaths = paths;
+  }
+
+  getTelemetryUseCollector(): boolean {
+    return this.telemetrySettings.useCollector ?? false;
+  }
+
+  getEnableSubagents(): boolean {
+    return this.enableSubagents;
+  }
+
+  getContinueOnFailedApiCall(): boolean {
+    return this.continueOnFailedApiCall;
+  }
+
+  getEnableInteractiveShell(): boolean {
+    return this.enableInteractiveShell;
+  }
+
+  getEnableMessageBusIntegration(): boolean {
+    return this.enableMessageBusIntegration;
   }
 
   async createToolRegistry(): Promise<ToolRegistry> {

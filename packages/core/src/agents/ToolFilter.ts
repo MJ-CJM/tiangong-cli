@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import type { AgentDefinition } from './types.js';
+import type { TiangongAgentDefinition as AgentDefinition } from './types.js';
 
 /**
  * Filters tools based on Agent's allow/deny lists

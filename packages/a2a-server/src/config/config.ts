@@ -73,7 +73,7 @@ export async function loadConfig(
   };
 
   const fileService = new FileDiscoveryService(workspaceDir);
-  const extensionContextFilePaths = extensions.flatMap((e) => e.contextFiles);
+  const extensionContextFilePaths = extensions.flatMap((e) => e.contextFiles || []);
   const { memoryContent, fileCount } = await loadServerHierarchicalMemory(
     workspaceDir,
     [workspaceDir],

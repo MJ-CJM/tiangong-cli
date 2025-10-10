@@ -6,14 +6,14 @@
 
 import { describe, it, expect } from 'vitest';
 import { AgentParser } from './AgentParser.js';
-import type { AgentDefinition } from './types.js';
+import type { TiangongAgentDefinition } from './types.js';
 
 describe('AgentParser', () => {
   const parser = new AgentParser();
 
   describe('serialize', () => {
     it('should serialize agent definition to markdown with front-matter', () => {
-      const definition: AgentDefinition = {
+      const definition: TiangongAgentDefinition = {
         kind: 'agent',
         name: 'test-agent',
         title: 'Test Agent',
@@ -49,7 +49,7 @@ describe('AgentParser', () => {
     });
 
     it('should handle minimal agent definition', () => {
-      const definition: AgentDefinition = {
+      const definition: TiangongAgentDefinition = {
         kind: 'agent',
         name: 'minimal',
         title: 'Minimal Agent',
@@ -80,7 +80,7 @@ describe('AgentParser', () => {
 
   describe('validateNameMatch', () => {
     it('should not throw for matching names', () => {
-      const definition: AgentDefinition = {
+      const definition: TiangongAgentDefinition = {
         kind: 'agent',
         name: 'test-agent',
         title: 'Test',
@@ -96,7 +96,7 @@ describe('AgentParser', () => {
     });
 
     it('should throw for mismatched names', () => {
-      const definition: AgentDefinition = {
+      const definition: TiangongAgentDefinition = {
         kind: 'agent',
         name: 'different-name',
         title: 'Test',

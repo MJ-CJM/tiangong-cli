@@ -4,10 +4,10 @@
  * Quick test script to verify MCP tool availability for agents
  */
 
-import { Config } from './packages/core/dist/src/config/config.js';
-import { ModelService } from './packages/core/dist/src/services/modelService.js';
-import { ToolRegistry } from './packages/core/dist/src/tools/tool-registry.js';
-import { AgentExecutor } from './packages/core/dist/src/agents/AgentExecutor.js';
+import { Config } from '../packages/core/dist/src/config/config.js';
+import { ModelService } from '../packages/core/dist/src/services/modelService.js';
+import { ToolRegistry } from '../packages/core/dist/src/tools/tool-registry.js';
+import { AgentExecutor } from '../packages/core/dist/src/agents/AgentExecutor.js';
 
 async function main() {
   console.log('=== Testing Agent MCP Tool Integration ===\n');

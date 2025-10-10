@@ -86,6 +86,48 @@ const AGENT_SCHEMA = {
       },
       additionalProperties: false,
     },
+    triggers: {
+      type: 'object',
+      properties: {
+        keywords: {
+          type: 'array',
+          items: { type: 'string' },
+        },
+        patterns: {
+          type: 'array',
+          items: { type: 'string' },
+        },
+        priority: {
+          type: 'number',
+          minimum: 0,
+          maximum: 100,
+        },
+      },
+      additionalProperties: false,
+    },
+    handoffs: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['to'],
+        properties: {
+          to: {
+            type: 'string',
+          },
+          when: {
+            type: 'string',
+            enum: ['manual', 'auto', 'conditional'],
+          },
+          description: {
+            type: 'string',
+          },
+          include_context: {
+            type: 'boolean',
+          },
+        },
+        additionalProperties: false,
+      },
+    },
     // Additional fields added by parser (not in front-matter)
     systemPrompt: {
       type: 'string',

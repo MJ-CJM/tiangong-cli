@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { AgentManager } from './packages/core/dist/src/agents/AgentManager.js';
+import { AgentManager } from '../packages/core/dist/src/agents/AgentManager.js';
 
 async function test() {
   const manager = new AgentManager();

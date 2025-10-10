@@ -161,6 +161,9 @@ export interface AgentExecuteOptions {
 
   /** Callback when a tool execution completes */
   onToolResult?: (toolName: string, result: any, error?: Error) => void;
+
+  /** Callback when a handoff is initiated */
+  onHandoff?: (fromAgent: string, toAgent: string, reason: string) => void;
 }
 
 /**

@@ -240,8 +240,8 @@ export class GeminiClient {
     ];
     try {
       const userMemory = this.config.getUserMemory();
-      const systemInstruction = getCoreSystemPrompt(userMemory);
       const model = this.config.getModel();
+      const systemInstruction = getCoreSystemPrompt(userMemory, model);
 
       const config: GenerateContentConfig = { ...this.generateContentConfig };
 
@@ -595,7 +595,8 @@ export class GeminiClient {
 
     try {
       const userMemory = this.config.getUserMemory();
-      const systemInstruction = getCoreSystemPrompt(userMemory);
+      const model = this.config.getModel();
+      const systemInstruction = getCoreSystemPrompt(userMemory, model);
       const requestConfig = {
         abortSignal,
         ...this.generateContentConfig,
@@ -719,7 +720,8 @@ export class GeminiClient {
 
     try {
       const userMemory = this.config.getUserMemory();
-      const systemInstruction = getCoreSystemPrompt(userMemory);
+      const model = this.config.getModel();
+      const systemInstruction = getCoreSystemPrompt(userMemory, model);
 
       const requestConfig: GenerateContentConfig = {
         abortSignal,
@@ -996,7 +998,7 @@ export class GeminiClient {
 
       // Get system instruction for all model types
       const userMemory = this.config.getUserMemory();
-      const systemInstruction = getCoreSystemPrompt(userMemory);
+      const systemInstruction = getCoreSystemPrompt(userMemory, actualModelName);
 
       const unifiedRequest: UnifiedRequest = {
         messages: [...historyMessages, userMessage],

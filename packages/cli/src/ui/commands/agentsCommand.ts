@@ -1303,6 +1303,21 @@ ${useAI ? `💡 **Tip:**
           // Execute agent with callbacks
           const result = await executor.execute(agentName, prompt, {
             contextMode,
+            // Callback when handoff is initiated
+            onHandoff: (fromAgent: string, toAgent: string, reason: string) => {
+              const fromAgentDef = agentManager.getAgent(fromAgent);
+              const toAgentDef = agentManager.getAgent(toAgent);
+
+              context.ui.addItem(
+                {
+                  type: MessageType.INFO,
+                  text: `🔄 **Agent Handoff**: ${fromAgentDef?.title || fromAgent} → ${toAgentDef?.title || toAgent}\n\n` +
+                        `📝 Reason: ${reason}\n\n` +
+                        `🚀 Switching to **${toAgentDef?.title || toAgent}** agent...`,
+                },
+                Date.now()
+              );
+            },
             // Callback when tool is called
             onToolCall: (toolName: string, args: any) => {
               // Format tool display name

@@ -136,10 +136,16 @@ const MAX_EVENTS = 1000;
  */
 const MAX_RETRY_EVENTS = 100;
 
+/**
+ * Timeout for clearcut fetch requests in milliseconds
+ * Reduced to 500ms to fail fast in restricted network environments
+ */
+const CLEARCUT_FETCH_TIMEOUT_MS = 500;
+
 // Singleton class for batch posting log events to Clearcut. When a new event comes in, the elapsed time
 // is checked and events are flushed to Clearcut if at least a minute has passed since the last flush.
 export class ClearcutLogger {
-  private static instance: ClearcutLogger;
+  // private static instance: ClearcutLogger; // Telemetry disabled - singleton instance not used
   private config?: Config;
   private sessionData: EventValue[] = [];
   private promptId: string = '';
@@ -176,19 +182,22 @@ export class ClearcutLogger {
     this.userAccountManager = new UserAccountManager();
   }
 
-  static getInstance(config?: Config): ClearcutLogger | undefined {
-    if (config === undefined || !config?.getUsageStatisticsEnabled())
-      return undefined;
-    if (!ClearcutLogger.instance) {
-      ClearcutLogger.instance = new ClearcutLogger(config);
-    }
-    return ClearcutLogger.instance;
+  static getInstance(_config?: Config): ClearcutLogger | undefined {
+    // Telemetry disabled for forked project - always return undefined
+    return undefined;
+    
+    // Original code (disabled):
+    // if (config === undefined || !config?.getUsageStatisticsEnabled())
+    //   return undefined;
+    // if (!ClearcutLogger.instance) {
+    //   ClearcutLogger.instance = new ClearcutLogger(config);
+    // }
+    // return ClearcutLogger.instance;
   }
 
   /** For testing purposes only. */
   static clearInstance(): void {
-    // @ts-expect-error - ClearcutLogger is a singleton, but we need to clear it for tests.
-    ClearcutLogger.instance = undefined;
+    // Telemetry disabled - no singleton instance to clear
   }
 
   enqueueLogEvent(event: LogEvent): void {
@@ -285,14 +294,20 @@ export class ClearcutLogger {
     let result: LogResponse = {};
 
     try {
+      // Create an AbortController with timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), CLEARCUT_FETCH_TIMEOUT_MS);
+
       const response = await fetch(CLEARCUT_URL, {
         method: 'POST',
         body: safeJsonStringify(request),
         headers: {
           'Content-Type': 'application/json',
         },
+        signal: controller.signal,
       });
 
+      clearTimeout(timeoutId);
       const responseBody = await response.text();
 
       if (response.status >= 200 && response.status < 300) {

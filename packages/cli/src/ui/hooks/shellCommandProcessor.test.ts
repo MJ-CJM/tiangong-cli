@@ -65,7 +65,7 @@ describe('useShellCommandProcessor', () => {
     setShellInputFocusedMock = vi.fn();
     mockConfig = {
       getTargetDir: () => '/test/dir',
-      getShouldUseNodePtyShell: () => false,
+      getEnableInteractiveShell: () => false,
       getShellExecutionConfig: () => ({
         terminalHeight: 20,
         terminalWidth: 80,
@@ -238,7 +238,7 @@ describe('useShellCommandProcessor', () => {
         '/test/dir',
         expect.any(Function),
         expect.any(Object),
-        false, // usePty
+        false, // enableInteractiveShell
         expect.any(Object),
       );
 

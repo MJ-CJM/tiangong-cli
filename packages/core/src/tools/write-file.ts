@@ -7,6 +7,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import * as Diff from 'diff';
+import { WRITE_FILE_TOOL_NAME } from './tool-names.js';
 import type { Config } from '../config/config.js';
 import { ApprovalMode } from '../config/config.js';
 import type {
@@ -128,6 +129,7 @@ export async function getCorrectedFileContent(
         file_path: filePath,
       },
       config.getGeminiClient(),
+      config.getBaseLlmClient(),
       abortSignal,
     );
     correctedContent = correctedParams.new_string;
@@ -135,7 +137,7 @@ export async function getCorrectedFileContent(
     // This implies new file (ENOENT)
     correctedContent = await ensureCorrectFileContent(
       proposedContent,
-      config.getGeminiClient(),
+      config.getBaseLlmClient(),
       abortSignal,
     );
   }
@@ -395,7 +397,7 @@ export class WriteFileTool
   extends BaseDeclarativeTool<WriteFileToolParams, ToolResult>
   implements ModifiableDeclarativeTool<WriteFileToolParams>
 {
-  static readonly Name: string = 'write_file';
+  static readonly Name: string = WRITE_FILE_TOOL_NAME;
 
   constructor(private readonly config: Config) {
     super(

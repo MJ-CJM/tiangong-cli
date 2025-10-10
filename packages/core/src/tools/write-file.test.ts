@@ -26,6 +26,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
 import { GeminiClient } from '../core/client.js';
+import type { BaseLlmClient } from '../core/baseLlmClient.js';
 import type { CorrectedEditResult } from '../utils/editCorrector.js';
 import {
   ensureCorrectEdit,
@@ -47,6 +48,7 @@ vi.mock('../ide/ide-client.js', () => ({
   },
 }));
 let mockGeminiClientInstance: Mocked<GeminiClient>;
+let mockBaseLlmClientInstance: Mocked<BaseLlmClient>;
 const mockEnsureCorrectEdit = vi.fn<typeof ensureCorrectEdit>();
 const mockEnsureCorrectFileContent = vi.fn<typeof ensureCorrectFileContent>();
 const mockIdeClient = {
@@ -70,6 +72,7 @@ const mockConfigInternal = {
   getApprovalMode: vi.fn(() => ApprovalMode.DEFAULT),
   setApprovalMode: vi.fn(),
   getGeminiClient: vi.fn(), // Initialize as a plain mock function
+  getBaseLlmClient: vi.fn(), // Initialize as a plain mock function
   getFileSystemService: () => fsService,
   getIdeMode: vi.fn(() => false),
   getWorkspaceContext: () => createMockWorkspaceContext(rootDir),
@@ -124,14 +127,22 @@ describe('WriteFileTool', () => {
     ) as Mocked<GeminiClient>;
     vi.mocked(GeminiClient).mockImplementation(() => mockGeminiClientInstance);
 
+    // Setup BaseLlmClient mock
+    mockBaseLlmClientInstance = {
+      generateJson: vi.fn(),
+    } as unknown as Mocked<BaseLlmClient>;
+
     vi.mocked(ensureCorrectEdit).mockImplementation(mockEnsureCorrectEdit);
     vi.mocked(ensureCorrectFileContent).mockImplementation(
       mockEnsureCorrectFileContent,
     );
 
-    // Now that mockGeminiClientInstance is initialized, set the mock implementation for getGeminiClient
+    // Now that mock instances are initialized, set the mock implementations for config getters
     mockConfigInternal.getGeminiClient.mockReturnValue(
       mockGeminiClientInstance,
+    );
+    mockConfigInternal.getBaseLlmClient.mockReturnValue(
+      mockBaseLlmClientInstance,
     );
 
     tool = new WriteFileTool(mockConfig);
@@ -149,7 +160,8 @@ describe('WriteFileTool', () => {
         _currentContent: string,
         params: EditToolParams,
         _client: GeminiClient,
-        signal?: AbortSignal, // Make AbortSignal optional to match usage
+        _baseClient: BaseLlmClient,
+        signal?: AbortSignal,
       ): Promise<CorrectedEditResult> => {
         if (signal?.aborted) {
           return Promise.reject(new Error('Aborted'));
@@ -163,10 +175,9 @@ describe('WriteFileTool', () => {
     mockEnsureCorrectFileContent.mockImplementation(
       async (
         content: string,
-        _client: GeminiClient,
+        _baseClient: BaseLlmClient,
         signal?: AbortSignal,
       ): Promise<string> => {
-        // Make AbortSignal optional
         if (signal?.aborted) {
           return Promise.reject(new Error('Aborted'));
         }
@@ -264,7 +275,7 @@ describe('WriteFileTool', () => {
 
       expect(mockEnsureCorrectFileContent).toHaveBeenCalledWith(
         proposedContent,
-        mockGeminiClientInstance,
+        mockBaseLlmClientInstance,
         abortSignal,
       );
       expect(mockEnsureCorrectEdit).not.toHaveBeenCalled();
@@ -308,6 +319,7 @@ describe('WriteFileTool', () => {
           file_path: filePath,
         },
         mockGeminiClientInstance,
+        mockBaseLlmClientInstance,
         abortSignal,
       );
       expect(mockEnsureCorrectFileContent).not.toHaveBeenCalled();
@@ -384,7 +396,7 @@ describe('WriteFileTool', () => {
 
       expect(mockEnsureCorrectFileContent).toHaveBeenCalledWith(
         proposedContent,
-        mockGeminiClientInstance,
+        mockBaseLlmClientInstance,
         abortSignal,
       );
       expect(confirmation).toEqual(
@@ -434,6 +446,7 @@ describe('WriteFileTool', () => {
           file_path: filePath,
         },
         mockGeminiClientInstance,
+        mockBaseLlmClientInstance,
         abortSignal,
       );
       expect(confirmation).toEqual(
@@ -600,7 +613,7 @@ describe('WriteFileTool', () => {
 
       expect(mockEnsureCorrectFileContent).toHaveBeenCalledWith(
         proposedContent,
-        mockGeminiClientInstance,
+        mockBaseLlmClientInstance,
         abortSignal,
       );
       expect(result.llmContent).toMatch(
@@ -664,6 +677,7 @@ describe('WriteFileTool', () => {
           file_path: filePath,
         },
         mockGeminiClientInstance,
+        mockBaseLlmClientInstance,
         abortSignal,
       );
       expect(result.llmContent).toMatch(/Successfully overwrote file/);

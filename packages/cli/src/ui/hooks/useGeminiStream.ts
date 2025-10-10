@@ -32,9 +32,9 @@ import {
   ApprovalMode,
   parseAndFormatApiError,
   ToolConfirmationOutcome,
-  getCodeAssistServer,
-  UserTierId,
   promptIdContext,
+  WRITE_FILE_TOOL_NAME,
+  tokenLimit,
 } from '@google/gemini-cli-core';
 import { type Part, type PartListUnion, FinishReason } from '@google/genai';
 import type {
@@ -72,15 +72,14 @@ enum StreamProcessingStatus {
   Error,
 }
 
-const EDIT_TOOL_NAMES = new Set(['replace', 'write_file']);
+const EDIT_TOOL_NAMES = new Set(['replace', WRITE_FILE_TOOL_NAME]);
 
-function showCitations(settings: LoadedSettings, config: Config): boolean {
+function showCitations(settings: LoadedSettings): boolean {
   const enabled = settings?.merged?.ui?.showCitations;
   if (enabled !== undefined) {
     return enabled;
   }
-  const server = getCodeAssistServer(config);
-  return (server && server.userTier !== UserTierId.FREE) ?? false;
+  return true;
 }
 
 /**
@@ -115,7 +114,7 @@ export const useGeminiStream = (
   const turnCancelledRef = useRef(false);
   const [isResponding, setIsResponding] = useState<boolean>(false);
   const [thought, setThought] = useState<ThoughtSummary | null>(null);
-  const [pendingHistoryItemRef, setPendingHistoryItem] =
+  const [pendingHistoryItem, pendingHistoryItemRef, setPendingHistoryItem] =
     useStateAndRef<HistoryItemWithoutId | null>(null);
   const processedMemoryToolsRef = useRef<Set<string>>(new Set());
   const { startNewPrompt, getPromptCount } = useSessionStats();
@@ -140,6 +139,24 @@ export const useGeminiStream = (
             ),
             Date.now(),
           );
+
+          // Record tool calls with full metadata before sending responses.
+          try {
+            const currentModel =
+              config.getGeminiClient().getCurrentSequenceModel() ??
+              config.getModel();
+            config
+              .getGeminiClient()
+              .getChat()
+              .recordCompletedToolCalls(
+                currentModel,
+                completedToolCallsFromScheduler,
+              );
+          } catch (error) {
+            console.error(
+              `Error recording completed tool call information: ${error}`,
+            );
+          }
 
           // Handle tool response submission immediately when tools complete
           await handleCompletedTools(
@@ -308,15 +325,6 @@ export const useGeminiStream = (
 
       if (typeof query === 'string') {
         const trimmedQuery = query.trim();
-        logUserPrompt(
-          config,
-          new UserPromptEvent(
-            trimmedQuery.length,
-            prompt_id,
-            config.getContentGeneratorConfig()?.authType,
-            trimmedQuery,
-          ),
-        );
         onDebugMessage(`User query: '${trimmedQuery}'`);
         await logger?.logMessage(MessageSenderType.USER, trimmedQuery);
 
@@ -564,7 +572,7 @@ export const useGeminiStream = (
 
   const handleCitationEvent = useCallback(
     (text: string, userMessageTimestamp: number) => {
-      if (!showCitations(settings, config)) {
+      if (!showCitations(settings)) {
         return;
       }
 
@@ -574,7 +582,7 @@ export const useGeminiStream = (
       }
       addItem({ type: MessageType.INFO, text }, userMessageTimestamp);
     },
-    [addItem, pendingHistoryItemRef, setPendingHistoryItem, settings, config],
+    [addItem, pendingHistoryItemRef, setPendingHistoryItem, settings],
   );
 
   const handleFinishedEvent = useCallback(
@@ -621,8 +629,15 @@ export const useGeminiStream = (
   );
 
   const handleChatCompressionEvent = useCallback(
-    (eventValue: ServerGeminiChatCompressedEvent['value']) =>
-      addItem(
+    (
+      eventValue: ServerGeminiChatCompressedEvent['value'],
+      userMessageTimestamp: number,
+    ) => {
+      if (pendingHistoryItemRef.current) {
+        addItem(pendingHistoryItemRef.current, userMessageTimestamp);
+        setPendingHistoryItem(null);
+      }
+      return addItem(
         {
           type: 'info',
           text:
@@ -632,8 +647,9 @@ export const useGeminiStream = (
             `${eventValue?.newTokenCount ?? 'unknown'} tokens).`,
         },
         Date.now(),
-      ),
-    [addItem, config],
+      );
+    },
+    [addItem, config, pendingHistoryItemRef, setPendingHistoryItem],
   );
 
   const handleMaxSessionTurnsEvent = useCallback(
@@ -648,6 +664,33 @@ export const useGeminiStream = (
         Date.now(),
       ),
     [addItem, config],
+  );
+
+  const handleContextWindowWillOverflowEvent = useCallback(
+    (estimatedRequestTokenCount: number, remainingTokenCount: number) => {
+      onCancelSubmit();
+
+      const limit = tokenLimit(config.getModel());
+
+      const isLessThan75Percent =
+        limit > 0 && remainingTokenCount < limit * 0.75;
+
+      let text = `Sending this message (${estimatedRequestTokenCount} tokens) might exceed the remaining context window limit (${remainingTokenCount} tokens).`;
+
+      if (isLessThan75Percent) {
+        text +=
+          ' Please try reducing the size of your message or use the `/compress` command to compress the chat history.';
+      }
+
+      addItem(
+        {
+          type: 'info',
+          text,
+        },
+        Date.now(),
+      );
+    },
+    [addItem, onCancelSubmit, config],
   );
 
   const handleLoopDetectionConfirmation = useCallback(
@@ -713,7 +756,7 @@ export const useGeminiStream = (
             handleErrorEvent(event.value, userMessageTimestamp);
             break;
           case ServerGeminiEventType.ChatCompressed:
-            handleChatCompressionEvent(event.value);
+            handleChatCompressionEvent(event.value, userMessageTimestamp);
             break;
           case ServerGeminiEventType.ToolCallConfirmation:
           case ServerGeminiEventType.ToolCallResponse:
@@ -721,6 +764,12 @@ export const useGeminiStream = (
             break;
           case ServerGeminiEventType.MaxSessionTurns:
             handleMaxSessionTurnsEvent();
+            break;
+          case ServerGeminiEventType.ContextWindowWillOverflow:
+            handleContextWindowWillOverflowEvent(
+              event.value.estimatedRequestTokenCount,
+              event.value.remainingTokenCount,
+            );
             break;
           case ServerGeminiEventType.Finished:
             handleFinishedEvent(
@@ -737,6 +786,7 @@ export const useGeminiStream = (
             loopDetectedRef.current = true;
             break;
           case ServerGeminiEventType.Retry:
+          case ServerGeminiEventType.InvalidStream:
             // Will add the missing logic later
             break;
           default: {
@@ -759,6 +809,7 @@ export const useGeminiStream = (
       handleChatCompressionEvent,
       handleFinishedEvent,
       handleMaxSessionTurnsEvent,
+      handleContextWindowWillOverflowEvent,
       handleCitationEvent,
     ],
   );
@@ -804,6 +855,19 @@ export const useGeminiStream = (
         }
 
         if (!options?.isContinuation) {
+          if (typeof queryToSend === 'string') {
+            // logging the text prompts only for now
+            const promptText = queryToSend;
+            logUserPrompt(
+              config,
+              new UserPromptEvent(
+                promptText.length,
+                prompt_id,
+                config.getContentGeneratorConfig()?.authType,
+                promptText,
+              ),
+            );
+          }
           startNewPrompt();
           setThought(null); // Reset thought when starting a new prompt
         }
@@ -1037,10 +1101,13 @@ export const useGeminiStream = (
     ],
   );
 
-  const pendingHistoryItems = [
-    pendingHistoryItemRef.current,
-    pendingToolCallGroupDisplay,
-  ].filter((i) => i !== undefined && i !== null);
+  const pendingHistoryItems = useMemo(
+    () =>
+      [pendingHistoryItem, pendingToolCallGroupDisplay].filter(
+        (i) => i !== undefined && i !== null,
+      ),
+    [pendingHistoryItem, pendingToolCallGroupDisplay],
+  );
 
   useEffect(() => {
     const saveRestorableToolCalls = async () => {

@@ -55,9 +55,27 @@ describe('JSON output', () => {
 
     expect(thrown).toBeDefined();
     const message = (thrown as Error).message;
-    const jsonStart = message.indexOf('{');
-    expect(jsonStart).toBeGreaterThan(-1);
-    const payload = JSON.parse(message.slice(jsonStart));
+
+    // Use a regex to find the first complete JSON object in the string
+    const jsonMatch = message.match(/{[\s\S]*}/);
+
+    // Fail if no JSON-like text was found
+    expect(
+      jsonMatch,
+      'Expected to find a JSON object in the error output',
+    ).toBeTruthy();
+
+    let payload;
+    try {
+      // Parse the matched JSON string
+      payload = JSON.parse(jsonMatch![0]);
+    } catch (parseError) {
+      console.error('Failed to parse the following JSON:', jsonMatch![0]);
+      throw new Error(
+        `Test failed: Could not parse JSON from error message. Details: ${parseError}`,
+      );
+    }
+
     expect(payload.error).toBeDefined();
     expect(payload.error.type).toBe('Error');
     expect(payload.error.code).toBe(1);
@@ -67,5 +85,32 @@ describe('JSON output', () => {
     expect(payload.error.message).toContain(
       'current auth type is oauth-personal',
     );
+  });
+
+  it('should not exit on tool errors and allow model to self-correct in JSON mode', async () => {
+    const result = await rig.run(
+      'Read the contents of /path/to/nonexistent/file.txt and tell me what it says',
+      '--output-format',
+      'json',
+    );
+
+    const parsed = JSON.parse(result);
+
+    // The response should contain an actual response from the model,
+    // not a fatal error that caused the CLI to exit
+    expect(parsed).toHaveProperty('response');
+    expect(typeof parsed.response).toBe('string');
+
+    // The model should acknowledge the error in its response
+    expect(parsed.response.toLowerCase()).toMatch(
+      /cannot|does not exist|not found|unable to|error|couldn't/,
+    );
+
+    // Stats should be present, indicating the session completed normally
+    expect(parsed).toHaveProperty('stats');
+    expect(parsed.stats).toHaveProperty('tools');
+
+    // Should NOT have an error field at the top level
+    expect(parsed.error).toBeUndefined();
   });
 });

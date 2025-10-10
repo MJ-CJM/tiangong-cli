@@ -8,6 +8,8 @@
 export * from './config/config.js';
 export * from './output/types.js';
 export * from './output/json-formatter.js';
+export * from './policy/types.js';
+export * from './policy/policy-engine.js';
 
 // Export model adapters and router (selective exports to avoid AuthType conflict)
 export {
@@ -97,6 +99,7 @@ export * from './utils/workspaceContext.js';
 export * from './utils/ignorePatterns.js';
 export * from './utils/partUtils.js';
 export * from './utils/promptIdContext.js';
+export * from './utils/thoughtUtils.js';
 
 // Export services
 export * from './services/fileDiscoveryService.js';
@@ -109,8 +112,7 @@ export * from './services/modelService.js';
 export * from './ide/ide-client.js';
 export * from './ide/ideContext.js';
 export * from './ide/ide-installer.js';
-export { getIdeInfo, DetectedIde } from './ide/detect-ide.js';
-export { type IdeInfo } from './ide/detect-ide.js';
+export { IDE_DEFINITIONS, type IdeInfo } from './ide/detect-ide.js';
 export * from './ide/constants.js';
 export * from './ide/types.js';
 
@@ -121,6 +123,7 @@ export * from './services/shellExecutionService.js';
 export * from './tools/tools.js';
 export * from './tools/tool-error.js';
 export * from './tools/tool-registry.js';
+export * from './tools/tool-names.js';
 
 // Export prompt logic
 export * from './prompts/mcp-prompts.js';
@@ -140,6 +143,7 @@ export * from './tools/web-search.js';
 export * from './tools/read-many-files.js';
 export * from './tools/mcp-client.js';
 export * from './tools/mcp-tool.js';
+export * from './tools/write-todos.js';
 
 // MCP OAuth
 export { MCPOAuthProvider } from './mcp/oauth-provider.js';

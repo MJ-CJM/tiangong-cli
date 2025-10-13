@@ -609,7 +609,7 @@ export async function discoverTools(
             funcDecl.description ?? '',
             funcDecl.parametersJsonSchema ?? { type: 'object', properties: {} },
             mcpServerConfig.trust,
-            undefined,
+            `${mcpServerName}__${funcDecl.name}`, // Always use fully qualified name
             cliConfig,
           ),
         );

@@ -111,8 +111,6 @@ export interface UIState {
   terminalWidth: number;
   terminalHeight: number;
   mainControlsRef: React.MutableRefObject<DOMElement | null>;
-  // NOTE: This is for performance profiling only.
-  rootUiRef: React.MutableRefObject<DOMElement | null>;
   currentIDE: IdeInfo | null;
   updateInfo: UpdateObject | null;
   showIdeRestartPrompt: boolean;

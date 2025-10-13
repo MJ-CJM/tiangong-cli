@@ -137,6 +137,20 @@ Slash commands provide meta-level control over the CLI itself.
       hierarchical memory, see the
       [CLI Configuration documentation](../get-started/configuration.md).
 
+- **`/model`**
+  - **Description:** Inspect or change the Gemini model powering the current session.
+  - **Sub-commands:**
+    - **`current`**:
+      - **Description:** Show the requested model and highlight if fallback mode is active.
+      - **Usage:** `/model current`
+    - **`list`**:
+      - **Description:** Display common Gemini CLI models alongside any custom models loaded from configuration files.
+      - **Usage:** `/model list`
+    - **`use`**:
+      - **Description:** Switch the active model for subsequent prompts in the session.
+      - **Usage:** `/model use <model-name>`
+      - **Note:** Pro-tier models cannot be selected while fallback mode is active—resolve the underlying quota issue first.
+
 - **`/restore`**
   - **Description:** Restores the project files to the state they were in just
     before a tool was executed. This is particularly useful for undoing file

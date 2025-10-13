@@ -11,6 +11,50 @@ export * from './output/json-formatter.js';
 export * from './policy/types.js';
 export * from './policy/policy-engine.js';
 
+// Export model adapters and router (selective exports to avoid AuthType conflict)
+export {
+  // Base types
+  ModelProvider,
+  ModelAuthType,  // Export as ModelAuthType to avoid conflict with contentGenerator's AuthType
+  MessageRole,
+  ErrorCategory,
+  // Errors
+  ModelAdapterError,
+  AuthenticationError,
+  QuotaExceededError,
+  ModelNotFoundError,
+  InvalidRequestError,
+  ServiceUnavailableError,
+  ContentFilterError,
+  createErrorFromResponse,
+  // Adapters
+  OpenAIAdapter,
+  ClaudeAdapter,
+  QwenAdapter,
+  CustomAdapter,
+  CustomResponseFormat,
+  // Router and registry
+  ModelRouter,
+  ModelAdapterRegistry,
+  globalAdapterRegistry,
+  // Utils
+  APITranslator,
+} from './adapters/index.js';
+
+export type {
+  ModelConfig,
+  UnifiedRequest,
+  UnifiedResponse,
+  UnifiedMessage,
+  ContentPart,
+  ToolDefinition,
+  TokenUsage,
+  TokenCountResponse,
+  EmbeddingResponse,
+  StreamChunk,
+  BaseModelClient,
+} from './adapters/index.js';
+
 // Export Core Logic
 export * from './core/client.js';
 export * from './core/contentGenerator.js';
@@ -62,6 +106,7 @@ export * from './services/fileDiscoveryService.js';
 export * from './services/gitService.js';
 export * from './services/chatRecordingService.js';
 export * from './services/fileSystemService.js';
+export * from './services/modelService.js';
 
 // Export IDE specific logic
 export * from './ide/ide-client.js';
@@ -122,3 +167,6 @@ export { Storage } from './config/storage.js';
 
 // Export test utils
 export * from './test-utils/index.js';
+
+// Export Agents System
+export * from './agents/index.js';

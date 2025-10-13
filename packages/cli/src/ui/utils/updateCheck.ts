@@ -63,15 +63,25 @@ export async function checkForUpdates(): Promise<UpdateObject | null> {
         distTag,
       });
 
+    // Helper function to add timeout to fetchInfo
+    const fetchInfoWithTimeout = async (notifier: ReturnType<typeof createNotifier>) => {
+      return Promise.race([
+        notifier.fetchInfo(),
+        new Promise<null>((_, reject) =>
+          setTimeout(() => reject(new Error('Update check timeout')), FETCH_TIMEOUT_MS)
+        )
+      ]).catch(() => null);
+    };
+
     if (isNightly) {
       const [nightlyUpdateInfo, latestUpdateInfo] = await Promise.all([
-        createNotifier('nightly').fetchInfo(),
-        createNotifier('latest').fetchInfo(),
+        fetchInfoWithTimeout(createNotifier('nightly')),
+        fetchInfoWithTimeout(createNotifier('latest')),
       ]);
 
       const bestUpdate = getBestAvailableUpdate(
-        nightlyUpdateInfo,
-        latestUpdateInfo,
+        nightlyUpdateInfo ?? undefined,
+        latestUpdateInfo ?? undefined,
       );
 
       if (bestUpdate && semver.gt(bestUpdate.latest, currentVersion)) {
@@ -82,7 +92,7 @@ export async function checkForUpdates(): Promise<UpdateObject | null> {
         };
       }
     } else {
-      const updateInfo = await createNotifier('latest').fetchInfo();
+      const updateInfo = await fetchInfoWithTimeout(createNotifier('latest'));
 
       if (updateInfo && semver.gt(updateInfo.latest, currentVersion)) {
         const message = `Gemini CLI update available! ${currentVersion} → ${updateInfo.latest}`;

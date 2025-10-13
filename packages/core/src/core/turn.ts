@@ -363,7 +363,15 @@ export class Turn {
       fnCall.id ??
       `${fnCall.name}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const name = fnCall.name || 'undefined_tool_name';
-    const args = (fnCall.args || {}) as Record<string, unknown>;
+
+    // Enhanced args validation to prevent empty object issues
+    let args = (fnCall.args || {}) as Record<string, unknown>;
+
+    // If args is an empty object and we have a known tool that requires parameters,
+    // log a warning and still proceed (the tool's validation will catch this)
+    if (Object.keys(args).length === 0 && fnCall.name) {
+      console.warn(`Warning: Tool '${fnCall.name}' called with empty parameters. This may indicate a model response parsing issue.`);
+    }
 
     const toolCallRequest: ToolCallRequestInfo = {
       callId,

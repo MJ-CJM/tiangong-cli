@@ -209,18 +209,19 @@ describe('validateNonInterActiveAuth', () => {
     expect(refreshAuthMock).toHaveBeenCalledWith(AuthType.USE_GEMINI);
   });
 
-  it('uses configuredAuthType over environment variables', async () => {
+  it('uses configuredAuthType if provided', async () => {
+    // Set required env var for USE_GEMINI
     process.env['GEMINI_API_KEY'] = 'fake-key';
     const nonInteractiveConfig = {
       refreshAuth: refreshAuthMock,
     };
     await validateNonInteractiveAuth(
-      AuthType.LOGIN_WITH_GOOGLE,
+      AuthType.USE_GEMINI,
       undefined,
       nonInteractiveConfig,
       mockSettings,
     );
-    expect(refreshAuthMock).toHaveBeenCalledWith(AuthType.LOGIN_WITH_GOOGLE);
+    expect(refreshAuthMock).toHaveBeenCalledWith(AuthType.USE_GEMINI);
   });
 
   it('exits if validateAuthMethod returns error', async () => {
@@ -273,14 +274,16 @@ describe('validateNonInterActiveAuth', () => {
     expect(refreshAuthMock).toHaveBeenCalledWith('invalid-auth-type');
   });
 
-  it('succeeds if effectiveAuthType matches enforcedAuthType', async () => {
+  it('uses enforcedAuthType if provided', async () => {
     mockSettings.merged.security.auth.enforcedType = AuthType.USE_GEMINI;
+    mockSettings.merged.security.auth.selectedType = AuthType.USE_GEMINI;
+    // Set required env var for USE_GEMINI to ensure enforcedAuthType takes precedence
     process.env['GEMINI_API_KEY'] = 'fake-key';
     const nonInteractiveConfig = {
       refreshAuth: refreshAuthMock,
     };
     await validateNonInteractiveAuth(
-      undefined,
+      AuthType.USE_GEMINI,
       undefined,
       nonInteractiveConfig,
       mockSettings,
@@ -288,11 +291,15 @@ describe('validateNonInterActiveAuth', () => {
     expect(refreshAuthMock).toHaveBeenCalledWith(AuthType.USE_GEMINI);
   });
 
-  it('exits if configuredAuthType does not match enforcedAuthType', async () => {
+  it('exits if currentAuthType does not match enforcedAuthType', async () => {
     mockSettings.merged.security.auth.enforcedType = AuthType.LOGIN_WITH_GOOGLE;
+    process.env['GOOGLE_GENAI_USE_VERTEXAI'] = 'true';
     const nonInteractiveConfig = {
       refreshAuth: refreshAuthMock,
       getOutputFormat: vi.fn().mockReturnValue(OutputFormat.TEXT),
+      getContentGeneratorConfig: vi
+        .fn()
+        .mockReturnValue({ authType: undefined }),
     };
     try {
       await validateNonInteractiveAuth(
@@ -306,31 +313,7 @@ describe('validateNonInterActiveAuth', () => {
       expect((e as Error).message).toContain('process.exit(1) called');
     }
     expect(consoleErrorSpy).toHaveBeenCalledWith(
-      "The enforced authentication type is 'oauth-personal', but the current type is 'gemini-api-key'. Please re-authenticate with the correct type.",
-    );
-    expect(processExitSpy).toHaveBeenCalledWith(1);
-  });
-
-  it('exits if auth from env var does not match enforcedAuthType', async () => {
-    mockSettings.merged.security.auth.enforcedType = AuthType.LOGIN_WITH_GOOGLE;
-    process.env['GEMINI_API_KEY'] = 'fake-key';
-    const nonInteractiveConfig = {
-      refreshAuth: refreshAuthMock,
-      getOutputFormat: vi.fn().mockReturnValue(OutputFormat.TEXT),
-    };
-    try {
-      await validateNonInteractiveAuth(
-        undefined,
-        undefined,
-        nonInteractiveConfig,
-        mockSettings,
-      );
-      expect.fail('Should have exited');
-    } catch (e) {
-      expect((e as Error).message).toContain('process.exit(1) called');
-    }
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      "The enforced authentication type is 'oauth-personal', but the current type is 'gemini-api-key'. Please re-authenticate with the correct type.",
+      'The configured auth type is oauth-personal, but the current auth type is vertex-ai. Please re-authenticate with the correct type.',
     );
     expect(processExitSpy).toHaveBeenCalledWith(1);
   });
@@ -369,6 +352,8 @@ describe('validateNonInterActiveAuth', () => {
 
     it('prints JSON error when enforced auth mismatches current auth and exits with code 1', async () => {
       mockSettings.merged.security.auth.enforcedType = AuthType.USE_GEMINI;
+      process.env['GOOGLE_GENAI_USE_GCA'] = 'true';
+
       const nonInteractiveConfig = {
         refreshAuth: refreshAuthMock,
         getOutputFormat: vi.fn().mockReturnValue(OutputFormat.JSON),
@@ -380,7 +365,7 @@ describe('validateNonInterActiveAuth', () => {
       let thrown: Error | undefined;
       try {
         await validateNonInteractiveAuth(
-          AuthType.LOGIN_WITH_GOOGLE,
+          undefined,
           undefined,
           nonInteractiveConfig as unknown as Config,
           mockSettings,
@@ -396,7 +381,7 @@ describe('validateNonInterActiveAuth', () => {
         expect(payload.error.type).toBe('Error');
         expect(payload.error.code).toBe(1);
         expect(payload.error.message).toContain(
-          "The enforced authentication type is 'gemini-api-key', but the current type is 'oauth-personal'. Please re-authenticate with the correct type.",
+          'The configured auth type is gemini-api-key, but the current auth type is oauth-personal.',
         );
       }
     });

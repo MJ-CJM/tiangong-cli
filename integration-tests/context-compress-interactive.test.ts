@@ -5,7 +5,7 @@
  */
 
 import { expect, describe, it, beforeEach, afterEach } from 'vitest';
-import { TestRig } from './test-helper.js';
+import { TestRig, type } from './test-helper.js';
 
 describe('Interactive Mode', () => {
   let rig: TestRig;
@@ -21,20 +21,21 @@ describe('Interactive Mode', () => {
   it('should trigger chat compression with /compress command', async () => {
     await rig.setup('interactive-compress-test');
 
-    const run = await rig.runInteractive();
+    const { ptyProcess } = rig.runInteractive();
+    await rig.ensureReadyForInput(ptyProcess);
 
     const longPrompt =
       'Dont do anything except returning a 1000 token long paragragh with the <name of the scientist who discovered theory of relativity> at the end to indicate end of response. This is a moderately long sentence.';
 
-    await run.type(longPrompt);
-    await run.type('\r');
+    await type(ptyProcess, longPrompt);
+    await type(ptyProcess, '\r');
 
-    await run.waitForText('einstein', 25000);
+    await rig.waitForText('einstein', 25000);
 
-    await run.type('/compress');
+    await type(ptyProcess, '/compress');
     // A small delay to allow React to re-render the command list.
     await new Promise((resolve) => setTimeout(resolve, 100));
-    await run.type('\r');
+    await type(ptyProcess, '\r');
 
     const foundEvent = await rig.waitForTelemetryEvent(
       'chat_compression',
@@ -49,11 +50,18 @@ describe('Interactive Mode', () => {
   it.skip('should handle compression failure on token inflation', async () => {
     await rig.setup('interactive-compress-test');
 
-    const run = await rig.runInteractive();
+    const { ptyProcess } = rig.runInteractive();
+    await rig.ensureReadyForInput(ptyProcess);
 
-    await run.type('/compress');
+    await type(ptyProcess, '/compress');
     await new Promise((resolve) => setTimeout(resolve, 100));
-    await run.type('\r');
-    await run.waitForText('compression was not beneficial', 25000);
+    await type(ptyProcess, '\r');
+
+    const compressionFailed = await rig.waitForText(
+      'compression was not beneficial',
+      25000,
+    );
+
+    expect(compressionFailed).toBe(true);
   });
 });

@@ -24,7 +24,8 @@ Once Gemini CLI is installed, run Gemini CLI from your command line:
 gemini
 ```
 
-For more installation options, see [Gemini CLI Installation](./installation.md).
+For more deployment options, see
+[Gemini CLI Execution and Deployment](./deployment.md).
 
 ## Authenticate
 

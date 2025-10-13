@@ -37,7 +37,6 @@ export {
   ExtensionDisableEvent,
   ExtensionEnableEvent,
   ExtensionUninstallEvent,
-  ExtensionUpdateEvent,
   ModelSlashCommandEvent,
 } from './src/telemetry/types.js';
 export { makeFakeConfig } from './src/test-utils/config.js';

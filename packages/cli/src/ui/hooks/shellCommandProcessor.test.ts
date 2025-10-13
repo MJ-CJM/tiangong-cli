@@ -219,7 +219,7 @@ describe('useShellCommandProcessor', () => {
       vi.useRealTimers();
     });
 
-    it('should update UI for text streams (non-interactive)', async () => {
+    it('should throttle pending UI updates for text streams (non-interactive)', async () => {
       const { result } = renderProcessorHook();
       act(() => {
         result.current.handleShellCommand(
@@ -243,43 +243,61 @@ describe('useShellCommandProcessor', () => {
       );
 
       // Wait for the async PID update to happen.
-      // Call 1: Initial, Call 2: PID update
       await vi.waitFor(() => {
+        // It's called once for initial, and once for the PID update.
         expect(setPendingHistoryItemMock).toHaveBeenCalledTimes(2);
       });
 
-      // Get the state after the PID update to feed into the stream updaters
-      const pidUpdateFn = setPendingHistoryItemMock.mock.calls[1][0];
-      const initialState = setPendingHistoryItemMock.mock.calls[0][0];
-      const stateAfterPid = pidUpdateFn(initialState);
-
-      // Simulate first output chunk
+      // Simulate rapid output
       act(() => {
         mockShellOutputCallback({
           type: 'data',
           chunk: 'hello',
         });
       });
-      // A UI update should have occurred.
-      expect(setPendingHistoryItemMock).toHaveBeenCalledTimes(3);
+      // The count should still be 2, as throttling is in effect.
+      expect(setPendingHistoryItemMock).toHaveBeenCalledTimes(2);
 
-      const streamUpdateFn1 = setPendingHistoryItemMock.mock.calls[2][0];
-      const stateAfterStream1 = streamUpdateFn1(stateAfterPid);
-      expect(stateAfterStream1.tools[0].resultDisplay).toBe('hello');
-
-      // Simulate second output chunk
+      // Simulate more rapid output
       act(() => {
         mockShellOutputCallback({
           type: 'data',
           chunk: ' world',
         });
       });
-      // Another UI update should have occurred.
-      expect(setPendingHistoryItemMock).toHaveBeenCalledTimes(4);
+      expect(setPendingHistoryItemMock).toHaveBeenCalledTimes(2);
 
-      const streamUpdateFn2 = setPendingHistoryItemMock.mock.calls[3][0];
-      const stateAfterStream2 = streamUpdateFn2(stateAfterStream1);
-      expect(stateAfterStream2.tools[0].resultDisplay).toBe('hello world');
+      // Advance time, but the update won't happen until the next event
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(OUTPUT_UPDATE_INTERVAL_MS + 1);
+      });
+
+      // Trigger one more event to cause the throttled update to fire.
+      act(() => {
+        mockShellOutputCallback({
+          type: 'data',
+          chunk: '',
+        });
+      });
+
+      // Now the cumulative update should have occurred.
+      // Call 1: Initial, Call 2: PID update, Call 3: Throttled stream update
+      expect(setPendingHistoryItemMock).toHaveBeenCalledTimes(3);
+
+      const streamUpdateFn = setPendingHistoryItemMock.mock.calls[2][0];
+      if (!streamUpdateFn || typeof streamUpdateFn !== 'function') {
+        throw new Error(
+          'setPendingHistoryItem was not called with a stream updater function',
+        );
+      }
+
+      // Get the state after the PID update to feed into the stream updater
+      const pidUpdateFn = setPendingHistoryItemMock.mock.calls[1][0];
+      const initialState = setPendingHistoryItemMock.mock.calls[0][0];
+      const stateAfterPid = pidUpdateFn(initialState);
+
+      const stateAfterStream = streamUpdateFn(stateAfterPid);
+      expect(stateAfterStream.tools[0].resultDisplay).toBe('hello world');
     });
 
     it('should show binary progress messages correctly', async () => {

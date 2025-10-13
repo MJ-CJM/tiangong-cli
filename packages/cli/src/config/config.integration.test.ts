@@ -12,10 +12,7 @@ import type {
   ConfigParameters,
   ContentGeneratorConfig,
 } from '@google/gemini-cli-core';
-import {
-  Config,
-  DEFAULT_FILE_FILTERING_OPTIONS,
-} from '@google/gemini-cli-core';
+import { Config } from '@google/gemini-cli-core';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 
@@ -81,14 +78,12 @@ describe('Configuration Integration Tests', () => {
         sandbox: false,
         targetDir: tempDir,
         debugMode: false,
-        fileFilteringRespectGitIgnore: undefined, // Should default to  DEFAULT_FILE_FILTERING_OPTIONS
+        fileFilteringRespectGitIgnore: undefined, // Should default to true
       };
 
       const config = new Config(configParams);
 
-      expect(config.getFileFilteringRespectGitIgnore()).toBe(
-        DEFAULT_FILE_FILTERING_OPTIONS.respectGitIgnore,
-      );
+      expect(config.getFileFilteringRespectGitIgnore()).toBe(true);
     });
 
     it('should load custom file filtering settings from configuration', async () => {
@@ -117,9 +112,7 @@ describe('Configuration Integration Tests', () => {
         sandbox: false,
         targetDir: tempDir,
         debugMode: false,
-        fileFiltering: {
-          respectGitIgnore: true,
-        },
+        fileFilteringRespectGitIgnore: true,
       };
 
       const config = new Config(configParams);
@@ -156,15 +149,13 @@ describe('Configuration Integration Tests', () => {
         sandbox: false,
         targetDir: tempDir,
         debugMode: false,
-        fileFiltering: {},
+        fileFilteringRespectGitIgnore: undefined,
       };
 
       const config = new Config(configParams);
 
       // All settings should use defaults
-      expect(config.getFileFilteringRespectGitIgnore()).toBe(
-        DEFAULT_FILE_FILTERING_OPTIONS.respectGitIgnore,
-      );
+      expect(config.getFileFilteringRespectGitIgnore()).toBe(true);
     });
 
     it('should handle missing configuration sections gracefully', async () => {
@@ -181,9 +172,7 @@ describe('Configuration Integration Tests', () => {
       const config = new Config(configParams);
 
       // All git-aware settings should use defaults
-      expect(config.getFileFilteringRespectGitIgnore()).toBe(
-        DEFAULT_FILE_FILTERING_OPTIONS.respectGitIgnore,
-      );
+      expect(config.getFileFilteringRespectGitIgnore()).toBe(true);
     });
   });
 
@@ -196,9 +185,7 @@ describe('Configuration Integration Tests', () => {
         sandbox: false,
         targetDir: tempDir,
         debugMode: false,
-        fileFiltering: {
-          respectGitIgnore: true,
-        },
+        fileFilteringRespectGitIgnore: true,
       };
 
       const config = new Config(configParams);

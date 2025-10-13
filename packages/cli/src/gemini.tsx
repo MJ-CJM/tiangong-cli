@@ -248,6 +248,16 @@ export async function main() {
 
   // Set a default auth type if one isn't set.
   if (!settings.merged.security?.auth?.selectedType) {
+    // Note: config is not available yet at this point in startup
+    // const customModels = config.getCustomModels?.() ?? {};
+    // const activeModel = config.getModel?.();
+    // if (activeModel && customModels[activeModel]) {
+    //   settings.setValue(
+    //     SettingScope.User,
+    //     'selectedAuthType',
+    //     AuthType.USE_CUSTOM,
+    //   );
+    // } else
     if (process.env['CLOUD_SHELL'] === 'true') {
       settings.setValue(
         SettingScope.User,
@@ -380,6 +390,7 @@ export async function main() {
     }
 
     const wasRaw = process.stdin.isRaw;
+    let kittyProtocolDetectionComplete: Promise<boolean> | undefined;
     if (config.isInteractive() && !wasRaw && process.stdin.isTTY) {
       // Set this as early as possible to avoid spurious characters from
       // input showing up in the output.
@@ -394,10 +405,11 @@ export async function main() {
       });
 
       // Detect and enable Kitty keyboard protocol once at startup.
-      await detectAndEnableKittyProtocol();
+      kittyProtocolDetectionComplete = detectAndEnableKittyProtocol();
     }
 
     setMaxSizedBoxDebugging(isDebugMode);
+
     const initializationResult = await initializeApp(config, settings);
 
     if (
@@ -421,6 +433,8 @@ export async function main() {
 
     // Render UI, passing necessary config values. Check that there is no command line question.
     if (config.isInteractive()) {
+      // Need kitty detection to be complete before we can start the interactive UI.
+      await kittyProtocolDetectionComplete;
       await startInteractiveUI(
         config,
         settings,

@@ -5,12 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import {
-  TestRig,
-  poll,
-  printDebugInfo,
-  validateModelOutput,
-} from './test-helper.js';
+import { TestRig, printDebugInfo, validateModelOutput } from './test-helper.js';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -23,7 +18,7 @@ describe('list_directory', () => {
     rig.sync();
 
     // Poll for filesystem changes to propagate in containers
-    await poll(
+    await rig.poll(
       () => {
         // Check if the files exist in the test directory
         const file1Path = join(rig.testDir!, 'file1.txt');

@@ -75,6 +75,7 @@ const mockConfig = {
     .fn()
     .mockReturnValue({ authType: AuthType.USE_GEMINI }),
   getEmbeddingModel: vi.fn().mockReturnValue('test-embedding-model'),
+  getUseModelRouter: vi.fn().mockReturnValue(false),
 } as unknown as Mocked<Config>;
 
 // Helper to create a mock GenerateContentResponse

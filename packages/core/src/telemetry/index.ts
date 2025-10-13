@@ -44,7 +44,6 @@ export {
   logExtensionEnable,
   logExtensionInstallEvent,
   logExtensionUninstall,
-  logExtensionUpdateEvent,
   logWebFetchFallbackAttempt,
 } from './loggers.js';
 export type { SlashCommandEvent, ChatCompressionEvent } from './types.js';
@@ -116,7 +115,6 @@ export {
   recordPerformanceRegression,
   recordBaselineComparison,
   isPerformanceMonitoringActive,
-  recordFlickerFrame,
   // Performance monitoring types
   PerformanceMetricType,
   MemoryMetricType,

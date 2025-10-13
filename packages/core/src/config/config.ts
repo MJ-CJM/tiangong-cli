@@ -5,6 +5,8 @@
  */
 
 import * as path from 'node:path';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
 import process from 'node:process';
 import type {
   ContentGenerator,
@@ -15,8 +17,10 @@ import {
   createContentGenerator,
   createContentGeneratorConfig,
 } from '../core/contentGenerator.js';
+import type { ModelProvider } from '../adapters/base/types.js';
 import { PromptRegistry } from '../prompts/prompt-registry.js';
 import { ToolRegistry } from '../tools/tool-registry.js';
+import { AgentExecutor } from '../agents/AgentExecutor.js';
 import { LSTool } from '../tools/ls.js';
 import { ReadFileTool } from '../tools/read-file.js';
 import { GrepTool } from '../tools/grep.js';
@@ -50,7 +54,6 @@ import {
 import { shouldAttemptBrowserLaunch } from '../utils/browser.js';
 import type { MCPOAuthConfig } from '../mcp/oauth-provider.js';
 import { ideContextStore } from '../ide/ideContext.js';
-import { WriteTodosTool } from '../tools/write-todos.js';
 import type { FileSystemService } from '../services/fileSystemService.js';
 import { StandardFileSystemService } from '../services/fileSystemService.js';
 import {
@@ -75,9 +78,6 @@ import { PolicyEngine } from '../policy/policy-engine.js';
 import type { PolicyEngineConfig } from '../policy/types.js';
 import type { UserTierId } from '../code_assist/types.js';
 import { ProxyAgent, setGlobalDispatcher } from 'undici';
-
-import { AgentRegistry } from '../agents/registry.js';
-import { SubagentToolWrapper } from '../agents/subagent-tool-wrapper.js';
 
 export enum ApprovalMode {
   DEFAULT = 'default',
@@ -117,20 +117,32 @@ export interface OutputSettings {
 }
 
 /**
- * All information required in CLI to handle an extension. Defined in Core so
- * that the collection of loaded, active, and inactive extensions can be passed
- * around on the config object though Core does not use this information
- * directly.
+ * Model provider configuration
  */
-export interface GeminiCLIExtension {
-  name: string;
-  version: string;
-  isActive: boolean;
-  path: string;
-  installMetadata?: ExtensionInstallMetadata;
-  mcpServers?: Record<string, MCPServerConfig>;
-  contextFiles: string[];
-  excludeTools?: string[];
+export interface ModelProviderConfig {
+  apiKey?: string;
+  baseUrl?: string;
+  timeout?: number;
+  retries?: number;
+}
+
+/**
+ * Model providers settings
+ */
+export interface ModelProvidersSettings {
+  gemini?: ModelProviderConfig;
+  openai?: ModelProviderConfig;
+  claude?: ModelProviderConfig;
+  qwen?: ModelProviderConfig;
+  custom?: ModelProviderConfig;
+}
+
+/**
+ * Active model configuration
+ */
+export interface ActiveModelConfig {
+  provider: 'gemini' | 'openai' | 'claude' | 'qwen' | 'custom';
+  model: string;
 }
 
 export interface ExtensionInstallMetadata {
@@ -142,16 +154,30 @@ export interface ExtensionInstallMetadata {
   allowPreRelease?: boolean;
 }
 
-import type { FileFilteringOptions } from './constants.js';
-import {
-  DEFAULT_FILE_FILTERING_OPTIONS,
-  DEFAULT_MEMORY_FILE_FILTERING_OPTIONS,
-} from './constants.js';
+export interface GeminiCLIExtension {
+  name: string;
+  version: string;
+  isActive: boolean;
+  path: string;
+  installMetadata?: ExtensionInstallMetadata;
+  mcpServers?: Record<string, MCPServerConfig>;
+  contextFiles?: string[];
+  excludeTools?: string[];
+}
 
-export type { FileFilteringOptions };
-export {
-  DEFAULT_FILE_FILTERING_OPTIONS,
-  DEFAULT_MEMORY_FILE_FILTERING_OPTIONS,
+export interface FileFilteringOptions {
+  respectGitIgnore: boolean;
+  respectGeminiIgnore: boolean;
+}
+// For memory files
+export const DEFAULT_MEMORY_FILE_FILTERING_OPTIONS: FileFilteringOptions = {
+  respectGitIgnore: false,
+  respectGeminiIgnore: true,
+};
+// For all other files
+export const DEFAULT_FILE_FILTERING_OPTIONS: FileFilteringOptions = {
+  respectGitIgnore: true,
+  respectGeminiIgnore: true,
 };
 
 export const DEFAULT_TRUNCATE_TOOL_OUTPUT_THRESHOLD = 4_000_000;
@@ -182,10 +208,8 @@ export class MCPServerConfig {
     // OAuth configuration
     readonly oauth?: MCPOAuthConfig,
     readonly authProviderType?: AuthProviderType,
-    // Service Account Configuration
-    /* targetAudience format: CLIENT_ID.apps.googleusercontent.com */
+    // Service Account Impersonation
     readonly targetAudience?: string,
-    /* targetServiceAccount format: <service-account-name>@<project-num>.iam.gserviceaccount.com */
     readonly targetServiceAccount?: string,
   ) {}
 }
@@ -246,6 +270,7 @@ export interface ConfigParameters {
   blockedMcpServers?: Array<{ name: string; extensionName: string }>;
   noBrowser?: boolean;
   summarizeToolOutput?: Record<string, SummarizeToolOutputSettings>;
+  folderTrustFeature?: boolean;
   folderTrust?: boolean;
   ideMode?: boolean;
   loadMemoryFromIncludeDirectories?: boolean;
@@ -253,7 +278,7 @@ export interface ConfigParameters {
   interactive?: boolean;
   trustedFolder?: boolean;
   useRipgrep?: boolean;
-  enableInteractiveShell?: boolean;
+  shouldUseNodePtyShell?: boolean;
   skipNextSpeakerCheck?: boolean;
   shellExecutionConfig?: ShellExecutionConfig;
   extensionManagement?: boolean;
@@ -263,19 +288,23 @@ export interface ConfigParameters {
   enableToolOutputTruncation?: boolean;
   eventEmitter?: EventEmitter;
   useSmartEdit?: boolean;
-  useWriteTodos?: boolean;
   policyEngineConfig?: PolicyEngineConfig;
   output?: OutputSettings;
   useModelRouter?: boolean;
-  enableMessageBusIntegration?: boolean;
+  modelConfig?: ActiveModelConfig;
+  modelProviders?: ModelProvidersSettings;
   enableSubagents?: boolean;
   continueOnFailedApiCall?: boolean;
+  enableInteractiveShell?: boolean;
+  enableMessageBusIntegration?: boolean;
 }
 
 export class Config {
   private toolRegistry!: ToolRegistry;
   private promptRegistry!: PromptRegistry;
-  private agentRegistry!: AgentRegistry;
+  private agentExecutor: AgentExecutor | null = null;
+  private workflowManager: import('../agents/WorkflowManager.js').WorkflowManager | null = null;
+  private workflowExecutor: import('../agents/WorkflowExecutor.js').WorkflowExecutor | null = null;
   private readonly sessionId: string;
   private fileSystemService: FileSystemService;
   private contentGeneratorConfig!: ContentGeneratorConfig;
@@ -296,7 +325,6 @@ export class Config {
   private readonly mcpServers: Record<string, MCPServerConfig> | undefined;
   private userMemory: string;
   private geminiMdFileCount: number;
-  private geminiMdFilePaths: string[];
   private approvalMode: ApprovalMode;
   private readonly showMemoryUsage: boolean;
   private readonly accessibility: AccessibilitySettings;
@@ -318,8 +346,10 @@ export class Config {
   private readonly cwd: string;
   private readonly bugCommand: BugCommandSettings | undefined;
   private model: string;
+  private customModels: Record<string, import('../adapters/base/index.js').ModelConfig> = {};
   private readonly extensionContextFilePaths: string[];
   private readonly noBrowser: boolean;
+  private readonly folderTrustFeature: boolean;
   private readonly folderTrust: boolean;
   private ideMode: boolean;
 
@@ -342,7 +372,7 @@ export class Config {
   private readonly interactive: boolean;
   private readonly trustedFolder: boolean | undefined;
   private readonly useRipgrep: boolean;
-  private readonly enableInteractiveShell: boolean;
+  private readonly shouldUseNodePtyShell: boolean;
   private readonly skipNextSpeakerCheck: boolean;
   private shellExecutionConfig: ShellExecutionConfig;
   private readonly extensionManagement: boolean = true;
@@ -355,14 +385,17 @@ export class Config {
   private readonly fileExclusions: FileExclusions;
   private readonly eventEmitter?: EventEmitter;
   private readonly useSmartEdit: boolean;
-  private readonly useWriteTodos: boolean;
   private readonly messageBus: MessageBus;
   private readonly policyEngine: PolicyEngine;
   private readonly outputSettings: OutputSettings;
   private readonly useModelRouter: boolean;
-  private readonly enableMessageBusIntegration: boolean;
+  private modelConfig: ActiveModelConfig | undefined;
+  private modelProviders: ModelProvidersSettings;
+  private geminiMdFilePaths: string[];
   private readonly enableSubagents: boolean;
   private readonly continueOnFailedApiCall: boolean;
+  private readonly enableInteractiveShell: boolean;
+  private readonly enableMessageBusIntegration: boolean;
 
   constructor(params: ConfigParameters) {
     this.sessionId = params.sessionId;
@@ -387,7 +420,6 @@ export class Config {
     this.mcpServers = params.mcpServers;
     this.userMemory = params.userMemory ?? '';
     this.geminiMdFileCount = params.geminiMdFileCount ?? 0;
-    this.geminiMdFilePaths = params.geminiMdFilePaths ?? [];
     this.approvalMode = params.approvalMode ?? ApprovalMode.DEFAULT;
     this.showMemoryUsage = params.showMemoryUsage ?? false;
     this.accessibility = params.accessibility ?? {};
@@ -398,17 +430,12 @@ export class Config {
       otlpProtocol: params.telemetry?.otlpProtocol,
       logPrompts: params.telemetry?.logPrompts ?? true,
       outfile: params.telemetry?.outfile,
-      useCollector: params.telemetry?.useCollector,
     };
     this.usageStatisticsEnabled = params.usageStatisticsEnabled ?? true;
 
     this.fileFiltering = {
-      respectGitIgnore:
-        params.fileFiltering?.respectGitIgnore ??
-        DEFAULT_FILE_FILTERING_OPTIONS.respectGitIgnore,
-      respectGeminiIgnore:
-        params.fileFiltering?.respectGeminiIgnore ??
-        DEFAULT_FILE_FILTERING_OPTIONS.respectGeminiIgnore,
+      respectGitIgnore: params.fileFiltering?.respectGitIgnore ?? true,
+      respectGeminiIgnore: params.fileFiltering?.respectGeminiIgnore ?? true,
       enableRecursiveFileSearch:
         params.fileFiltering?.enableRecursiveFileSearch ?? true,
       disableFuzzySearch: params.fileFiltering?.disableFuzzySearch ?? false,
@@ -428,6 +455,7 @@ export class Config {
     this._blockedMcpServers = params.blockedMcpServers ?? [];
     this.noBrowser = params.noBrowser ?? false;
     this.summarizeToolOutput = params.summarizeToolOutput;
+    this.folderTrustFeature = params.folderTrustFeature ?? false;
     this.folderTrust = params.folderTrust ?? false;
     this.ideMode = params.ideMode ?? false;
     this.loadMemoryFromIncludeDirectories =
@@ -436,7 +464,7 @@ export class Config {
     this.interactive = params.interactive ?? false;
     this.trustedFolder = params.trustedFolder;
     this.useRipgrep = params.useRipgrep ?? true;
-    this.enableInteractiveShell = params.enableInteractiveShell ?? false;
+    this.shouldUseNodePtyShell = params.shouldUseNodePtyShell ?? false;
     this.skipNextSpeakerCheck = params.skipNextSpeakerCheck ?? true;
     this.shellExecutionConfig = {
       terminalWidth: params.shellExecutionConfig?.terminalWidth ?? 80,
@@ -449,14 +477,12 @@ export class Config {
       DEFAULT_TRUNCATE_TOOL_OUTPUT_THRESHOLD;
     this.truncateToolOutputLines =
       params.truncateToolOutputLines ?? DEFAULT_TRUNCATE_TOOL_OUTPUT_LINES;
-    this.enableToolOutputTruncation = params.enableToolOutputTruncation ?? true;
+    this.enableToolOutputTruncation =
+      params.enableToolOutputTruncation ?? false;
     this.useSmartEdit = params.useSmartEdit ?? true;
-    this.useWriteTodos = params.useWriteTodos ?? false;
     this.useModelRouter = params.useModelRouter ?? false;
-    this.enableMessageBusIntegration =
-      params.enableMessageBusIntegration ?? false;
-    this.enableSubagents = params.enableSubagents ?? false;
-    this.continueOnFailedApiCall = params.continueOnFailedApiCall ?? true;
+    this.modelConfig = params.modelConfig;
+    this.modelProviders = params.modelProviders ?? {};
     this.extensionManagement = params.extensionManagement ?? true;
     this.storage = new Storage(this.targetDir);
     this.enablePromptCompletion = params.enablePromptCompletion ?? false;
@@ -467,6 +493,11 @@ export class Config {
     this.outputSettings = {
       format: params.output?.format ?? OutputFormat.TEXT,
     };
+    this.geminiMdFilePaths = params.geminiMdFilePaths ?? [];
+    this.enableSubagents = params.enableSubagents ?? false;
+    this.continueOnFailedApiCall = params.continueOnFailedApiCall ?? false;
+    this.enableInteractiveShell = params.enableInteractiveShell ?? false;
+    this.enableMessageBusIntegration = params.enableMessageBusIntegration ?? false;
 
     if (params.contextFileName) {
       setGeminiMdFilename(params.contextFileName);
@@ -481,6 +512,11 @@ export class Config {
     }
     this.geminiClient = new GeminiClient(this);
     this.modelRouterService = new ModelRouterService(this);
+
+    // Load custom model configurations if model router is enabled
+    if (this.useModelRouter) {
+      this.loadCustomModelConfigs();
+    }
   }
 
   /**
@@ -498,11 +534,8 @@ export class Config {
       await this.getGitService();
     }
     this.promptRegistry = new PromptRegistry();
-
-    this.agentRegistry = new AgentRegistry(this);
-    await this.agentRegistry.initialize();
-
     this.toolRegistry = await this.createToolRegistry();
+    logCliConfiguration(this, new StartSessionEvent(this, this.toolRegistry));
 
     await this.geminiClient.initialize();
   }
@@ -539,9 +572,6 @@ export class Config {
 
     // Reset the session flag since we're explicitly changing auth and using default model
     this.inFallbackMode = false;
-
-    // Logging the cli configuration here as the auth related configuration params would have been loaded by this point
-    logCliConfiguration(this, new StartSessionEvent(this, this.toolRegistry));
   }
 
   getUserTier(): UserTierId | undefined {
@@ -593,8 +623,75 @@ export class Config {
     this.model = newModel;
   }
 
+  /**
+   * Get custom model configurations
+   */
+  getCustomModels(): Record<string, import('../adapters/base/index.js').ModelConfig> {
+    return { ...this.customModels };
+  }
+
+  /**
+   * Set a custom model configuration
+   */
+  setCustomModel(name: string, config: import('../adapters/base/index.js').ModelConfig): void {
+    this.customModels[name] = config;
+  }
+
+  /**
+   * Remove a custom model configuration
+   */
+  removeCustomModel(name: string): void {
+    delete this.customModels[name];
+  }
+
   isInFallbackMode(): boolean {
     return this.inFallbackMode;
+  }
+
+  /**
+   * Load custom model configurations from ~/.gemini/config.json
+   */
+  private loadCustomModelConfigs(): void {
+    try {
+      const configPath = path.join(os.homedir(), '.gemini', 'config.json');
+      const configContent = fs.readFileSync(configPath, 'utf8');
+      const config = JSON.parse(configContent);
+
+      if (config.models) {
+        // Convert config.json format to ModelConfig format
+        for (const [modelName, modelDef] of Object.entries(config.models)) {
+          const def = modelDef as any;
+
+          // Copy all fields from config, ensuring we preserve capabilities, adapterType, etc.
+          const modelConfig: any = {
+            ...def, // Copy all fields from the config
+            provider: def.provider || 'custom',
+            model: def.model || modelName,
+            authType: 'api-key', // Set authType for custom models
+            // Ensure these exist even if not in config
+            apiKey: def.apiKey || '',
+            baseUrl: def.baseUrl || '',
+            options: def.options || {}
+          };
+
+          this.customModels[modelName] = modelConfig;
+        }
+        console.log(`Loaded ${Object.keys(config.models).length} custom model configurations`);
+      }
+
+      // Set default model if specified and exists in custom models
+      if (config.defaultModel && this.customModels[config.defaultModel]) {
+        const defaultModelConfig = this.customModels[config.defaultModel];
+        this.modelConfig = {
+          provider: defaultModelConfig.provider as ModelProvider,
+          model: defaultModelConfig.model
+        };
+        this.model = config.defaultModel;
+        console.log(`Set default model to: ${config.defaultModel}`);
+      }
+    } catch (error) {
+      console.log('Could not load custom model configurations:', error instanceof Error ? error.message : 'Unknown error');
+    }
   }
 
   setFallbackMode(active: boolean): void {
@@ -648,16 +745,94 @@ export class Config {
     return this.workspaceContext;
   }
 
-  getAgentRegistry(): AgentRegistry {
-    return this.agentRegistry;
-  }
-
   getToolRegistry(): ToolRegistry {
     return this.toolRegistry;
   }
 
   getPromptRegistry(): PromptRegistry {
     return this.promptRegistry;
+  }
+
+  /**
+   * Get or create the global AgentExecutor instance
+   *
+   * This ensures agent contexts are preserved across multiple invocations
+   * within the same CLI session.
+   */
+  async getAgentExecutor(): Promise<AgentExecutor> {
+    if (!this.agentExecutor) {
+      // Import ModelService dynamically to avoid circular dependency
+      const { ModelService } = await import('../services/modelService.js');
+      const modelService = new ModelService(this);
+
+      this.agentExecutor = new AgentExecutor(
+        this,
+        modelService,
+        this.toolRegistry,
+      );
+
+      await this.agentExecutor.initialize();
+    }
+
+    return this.agentExecutor;
+  }
+
+  /**
+   * Sync main session conversation history to agent context manager
+   *
+   * This enables agents with shared context mode to access the main conversation.
+   *
+   * @param history - Main session conversation history in Gemini Content format
+   */
+  async syncMainSessionContext(history: any[]): Promise<void> {
+    if (!this.agentExecutor) {
+      // Initialize executor if not already done
+      await this.getAgentExecutor();
+    }
+
+    // Import converter
+    const { convertGeminiToUnifiedMessages } = await import(
+      '../agents/messageConverter.js'
+    );
+
+    // Convert and set main session context
+    const unifiedMessages = convertGeminiToUnifiedMessages(history);
+    const contextManager = this.agentExecutor!.getContextManager();
+    contextManager.setMainSessionContext(unifiedMessages);
+  }
+
+  /**
+   * Get or create the global WorkflowManager instance
+   *
+   * This manages workflow definitions loaded from YAML files.
+   */
+  async getWorkflowManager(): Promise<import('../agents/WorkflowManager.js').WorkflowManager> {
+    if (!this.workflowManager) {
+      const { WorkflowManager } = await import('../agents/WorkflowManager.js');
+      this.workflowManager = new WorkflowManager(this);
+      await this.workflowManager.loadWorkflows();
+    }
+
+    return this.workflowManager;
+  }
+
+  /**
+   * Get or create the global WorkflowExecutor instance
+   *
+   * This executes workflow steps using the AgentExecutor.
+   */
+  async getWorkflowExecutor(): Promise<import('../agents/WorkflowExecutor.js').WorkflowExecutor> {
+    if (!this.workflowExecutor) {
+      const { WorkflowExecutor } = await import('../agents/WorkflowExecutor.js');
+
+      // Ensure AgentExecutor and WorkflowManager are initialized
+      const agentExecutor = await this.getAgentExecutor();
+      const workflowManager = await this.getWorkflowManager();
+
+      this.workflowExecutor = new WorkflowExecutor(agentExecutor, workflowManager);
+    }
+
+    return this.workflowExecutor;
   }
 
   getDebugMode(): boolean {
@@ -715,14 +890,6 @@ export class Config {
     this.geminiMdFileCount = count;
   }
 
-  getGeminiMdFilePaths(): string[] {
-    return this.geminiMdFilePaths;
-  }
-
-  setGeminiMdFilePaths(paths: string[]): void {
-    this.geminiMdFilePaths = paths;
-  }
-
   getApprovalMode(): ApprovalMode {
     return this.approvalMode;
   }
@@ -766,10 +933,6 @@ export class Config {
 
   getTelemetryOutfile(): string | undefined {
     return this.telemetrySettings.outfile;
-  }
-
-  getTelemetryUseCollector(): boolean {
-    return this.telemetrySettings.useCollector ?? false;
   }
 
   getGeminiClient(): GeminiClient {
@@ -886,17 +1049,18 @@ export class Config {
     return this.ideMode;
   }
 
-  /**
-   * Returns 'true' if the folder trust feature is enabled.
-   */
-  getFolderTrust(): boolean {
-    return this.folderTrust;
+  getFolderTrustFeature(): boolean {
+    return this.folderTrustFeature;
   }
 
   /**
    * Returns 'true' if the workspace is considered "trusted".
    * 'false' for untrusted.
    */
+  getFolderTrust(): boolean {
+    return this.folderTrust;
+  }
+
   isTrustedFolder(): boolean {
     // isWorkspaceTrusted in cli/src/config/trustedFolder.js returns undefined
     // when the file based trust value is unavailable, since it is mainly used
@@ -946,16 +1110,12 @@ export class Config {
     return this.useRipgrep;
   }
 
-  getEnableInteractiveShell(): boolean {
-    return this.enableInteractiveShell;
+  getShouldUseNodePtyShell(): boolean {
+    return this.shouldUseNodePtyShell;
   }
 
   getSkipNextSpeakerCheck(): boolean {
     return this.skipNextSpeakerCheck;
-  }
-
-  getContinueOnFailedApiCall(): boolean {
-    return this.continueOnFailedApiCall;
   }
 
   getShellExecutionConfig(): ShellExecutionConfig {
@@ -1001,10 +1161,6 @@ export class Config {
     return this.useSmartEdit;
   }
 
-  getUseWriteTodos(): boolean {
-    return this.useWriteTodos;
-  }
-
   getOutputFormat(): OutputFormat {
     return this.outputSettings?.format
       ? this.outputSettings.format
@@ -1013,6 +1169,78 @@ export class Config {
 
   getUseModelRouter(): boolean {
     return this.useModelRouter;
+  }
+
+  /**
+   * Get the current model configuration for ModelRouter
+   */
+  getModelConfig(): import('../adapters/base/types.js').ModelConfig | null {
+    if (!this.useModelRouter || !this.modelConfig) {
+      return null;
+    }
+
+    const { provider, model } = this.modelConfig;
+
+    // Debug: Log what we're looking for
+    if (process.env['DEBUG_MODEL_REQUESTS']) {
+      console.log('[DEBUG] getModelConfig lookup:', {
+        provider,
+        model,
+        availableCustomModels: Object.keys(this.customModels)
+      });
+    }
+
+    // First, check if there's a full custom model configuration
+    // This preserves capabilities, adapterType, and all other fields
+    const customModelKey = model; // Try model name first
+    if (this.customModels[customModelKey]) {
+      if (process.env['DEBUG_MODEL_REQUESTS']) {
+        console.log('[DEBUG] Found custom model config:', customModelKey);
+      }
+      return this.customModels[customModelKey];
+    }
+
+    // Also try provider:model format
+    const providerModelKey = `${provider}:${model}`;
+    if (this.customModels[providerModelKey]) {
+      if (process.env['DEBUG_MODEL_REQUESTS']) {
+        console.log('[DEBUG] Found custom model config:', providerModelKey);
+      }
+      return this.customModels[providerModelKey];
+    }
+
+    // Fallback: construct basic config from modelProviders
+    const providerSettings = this.modelProviders?.[provider];
+
+    return {
+      provider: provider as import('../adapters/base/types.js').ModelProvider,
+      model,
+      apiKey: providerSettings?.apiKey,
+      baseUrl: providerSettings?.baseUrl,
+      options: {
+        timeout: providerSettings?.timeout,
+        retries: providerSettings?.retries
+      }
+    };
+  }
+
+  /**
+   * Set the active model configuration
+   */
+  setModelConfig(config: ActiveModelConfig): void {
+    if (!this.useModelRouter) {
+      throw new Error('ModelRouter is not enabled. Set useModelRouter: true in settings.');
+    }
+
+    this.modelConfig = config;
+    // TODO: Persist to user settings file
+  }
+
+  /**
+   * Get all configured model providers
+   */
+  getModelProviders(): ModelProvidersSettings {
+    return this.modelProviders || {};
   }
 
   async getGitService(): Promise<GitService> {
@@ -1035,12 +1263,32 @@ export class Config {
     return this.policyEngine;
   }
 
-  getEnableMessageBusIntegration(): boolean {
-    return this.enableMessageBusIntegration;
+  getGeminiMdFilePaths(): string[] {
+    return this.geminiMdFilePaths;
+  }
+
+  setGeminiMdFilePaths(paths: string[]): void {
+    this.geminiMdFilePaths = paths;
+  }
+
+  getTelemetryUseCollector(): boolean {
+    return this.telemetrySettings.useCollector ?? false;
   }
 
   getEnableSubagents(): boolean {
     return this.enableSubagents;
+  }
+
+  getContinueOnFailedApiCall(): boolean {
+    return this.continueOnFailedApiCall;
+  }
+
+  getEnableInteractiveShell(): boolean {
+    return this.enableInteractiveShell;
+  }
+
+  getEnableMessageBusIntegration(): boolean {
+    return this.enableMessageBusIntegration;
   }
 
   async createToolRegistry(): Promise<ToolRegistry> {
@@ -1076,24 +1324,7 @@ export class Config {
       }
 
       if (isEnabled) {
-        // Pass message bus to tools when feature flag is enabled
-        // This first implementation is only focused on the general case of
-        // the tool registry.
-        const messageBusEnabled = this.getEnableMessageBusIntegration();
-        if (this.debugMode && messageBusEnabled) {
-          console.log(
-            `[DEBUG] enableMessageBusIntegration setting: ${messageBusEnabled}`,
-          );
-        }
-        const toolArgs = messageBusEnabled
-          ? [...args, this.getMessageBus()]
-          : args;
-        if (this.debugMode && messageBusEnabled) {
-          console.log(
-            `[DEBUG] Registering ${className} with messageBus: ${messageBusEnabled ? 'YES' : 'NO'}`,
-          );
-        }
-        registry.registerTool(new ToolClass(...toolArgs));
+        registry.registerTool(new ToolClass(...args));
       }
     };
 
@@ -1130,44 +1361,6 @@ export class Config {
     registerCoreTool(ShellTool, this);
     registerCoreTool(MemoryTool);
     registerCoreTool(WebSearchTool, this);
-    if (this.getUseWriteTodos()) {
-      registerCoreTool(WriteTodosTool, this);
-    }
-
-    // Register Subagents as Tools
-    if (this.getEnableSubagents()) {
-      const agentDefinitions = this.agentRegistry.getAllDefinitions();
-      for (const definition of agentDefinitions) {
-        // We must respect the main allowed/exclude lists for agents too.
-        const excludeTools = this.getExcludeTools() || [];
-        const allowedTools = this.getAllowedTools();
-
-        const isExcluded = excludeTools.includes(definition.name);
-        const isAllowed =
-          !allowedTools || allowedTools.includes(definition.name);
-
-        if (isAllowed && !isExcluded) {
-          try {
-            const messageBusEnabled = this.getEnableMessageBusIntegration();
-            const wrapper = new SubagentToolWrapper(
-              definition,
-              this,
-              messageBusEnabled ? this.getMessageBus() : undefined,
-            );
-            registry.registerTool(wrapper);
-          } catch (error) {
-            console.error(
-              `Failed to wrap agent '${definition.name}' as a tool:`,
-              error,
-            );
-          }
-        } else if (this.getDebugMode()) {
-          console.log(
-            `[Config] Skipping registration of agent '${definition.name}' due to allow/exclude configuration.`,
-          );
-        }
-      }
-    }
 
     await registry.discoverAllTools();
     return registry;

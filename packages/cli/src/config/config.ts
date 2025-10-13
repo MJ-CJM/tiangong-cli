@@ -510,7 +510,7 @@ export async function loadCliConfig(
   }
 
   const extensionContextFilePaths = activeExtensions.flatMap(
-    (e) => e.contextFiles,
+    (e) => e.contextFiles || [],
   );
 
   const fileService = new FileDiscoveryService(cwd);
@@ -715,7 +715,7 @@ export async function loadCliConfig(
     },
     telemetry: telemetrySettings,
     usageStatisticsEnabled: settings.privacy?.usageStatisticsEnabled ?? true,
-    fileFiltering,
+    fileFiltering: settings.context?.fileFiltering,
     checkpointing:
       argv.checkpointing || settings.general?.checkpointing?.enabled,
     proxy:
@@ -751,7 +751,6 @@ export async function loadCliConfig(
     enableToolOutputTruncation: settings.tools?.enableToolOutputTruncation,
     eventEmitter: appEvents,
     useSmartEdit: argv.useSmartEdit ?? settings.useSmartEdit,
-    useWriteTodos: argv.useWriteTodos ?? settings.useWriteTodos,
     output: {
       format: (argv.outputFormat ?? settings.output?.format) as OutputFormat,
     },

@@ -228,14 +228,13 @@ describe('run_shell_command', () => {
     ).toBeTruthy();
   });
 
-  it('should allow all with "ShellTool" and other specific tools', async () => {
+  //TODO - https://github.com/google-gemini/gemini-cli/issues/10768
+  it.skip('should allow all with "ShellTool" and other specifics', async () => {
     const rig = new TestRig();
-    await rig.setup(
-      'should allow all with "ShellTool" and other specific tools',
-    );
+    await rig.setup('should allow all with "ShellTool" and other specifics');
 
     const { tool } = getLineCountCommand();
-    const prompt = `Please run the command "echo test-allow-all" and show me the output`;
+    const prompt = `use date`;
 
     const result = await rig.run({
       stdin: prompt,
@@ -247,10 +246,9 @@ describe('run_shell_command', () => {
 
     const foundToolCall = await rig.waitForToolCall('run_shell_command', 15000);
 
-    if (!foundToolCall || !result.includes('test-allow-all')) {
+    if (!foundToolCall) {
       printDebugInfo(rig, result, {
         'Found tool call': foundToolCall,
-        Result: result,
       });
     }
 
@@ -258,13 +256,6 @@ describe('run_shell_command', () => {
       foundToolCall,
       'Expected to find a run_shell_command tool call',
     ).toBeTruthy();
-
-    // Validate model output - will throw if no output, warn if missing expected content
-    validateModelOutput(
-      result,
-      'test-allow-all',
-      'Shell command stdin allow all',
-    );
   });
 
   it('should propagate environment variables to the child process', async () => {

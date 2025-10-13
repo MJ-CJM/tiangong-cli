@@ -10,11 +10,6 @@ import { Text, useIsScreenReaderEnabled } from 'ink';
 import { App } from './App.js';
 import { UIStateContext, type UIState } from './contexts/UIStateContext.js';
 import { StreamingState } from './types.js';
-import {
-  ConfigContext,
-  type Config,
-  type Telemetry,
-} from './contexts/ConfigContext.js';
 
 vi.mock('ink', async (importOriginal) => {
   const original = await importOriginal<typeof import('ink')>();
@@ -54,7 +49,6 @@ describe('App', () => {
     quittingMessages: null,
     dialogsVisible: false,
     mainControlsRef: { current: null },
-    rootUiRef: { current: null },
     historyManager: {
       addItem: vi.fn(),
       history: [],
@@ -64,19 +58,12 @@ describe('App', () => {
     },
   };
 
-  const mockConfig = {
-    telemetry: {} as Telemetry,
-  } as Config;
-
-  const renderWithProviders = (ui: React.ReactElement, state: UIState) =>
-    render(
-      <ConfigContext.Provider value={mockConfig}>
-        <UIStateContext.Provider value={state}>{ui}</UIStateContext.Provider>
-      </ConfigContext.Provider>,
-    );
-
   it('should render main content and composer when not quitting', () => {
-    const { lastFrame } = renderWithProviders(<App />, mockUIState as UIState);
+    const { lastFrame } = render(
+      <UIStateContext.Provider value={mockUIState as UIState}>
+        <App />
+      </UIStateContext.Provider>,
+    );
 
     expect(lastFrame()).toContain('MainContent');
     expect(lastFrame()).toContain('Notifications');
@@ -89,7 +76,11 @@ describe('App', () => {
       quittingMessages: [{ id: 1, type: 'user', text: 'test' }],
     } as UIState;
 
-    const { lastFrame } = renderWithProviders(<App />, quittingUIState);
+    const { lastFrame } = render(
+      <UIStateContext.Provider value={quittingUIState}>
+        <App />
+      </UIStateContext.Provider>,
+    );
 
     expect(lastFrame()).toContain('Quitting...');
   });
@@ -100,7 +91,11 @@ describe('App', () => {
       dialogsVisible: true,
     } as UIState;
 
-    const { lastFrame } = renderWithProviders(<App />, dialogUIState);
+    const { lastFrame } = render(
+      <UIStateContext.Provider value={dialogUIState}>
+        <App />
+      </UIStateContext.Provider>,
+    );
 
     expect(lastFrame()).toContain('MainContent');
     expect(lastFrame()).toContain('Notifications');
@@ -114,7 +109,11 @@ describe('App', () => {
       ctrlCPressedOnce: true,
     } as UIState;
 
-    const { lastFrame } = renderWithProviders(<App />, ctrlCUIState);
+    const { lastFrame } = render(
+      <UIStateContext.Provider value={ctrlCUIState}>
+        <App />
+      </UIStateContext.Provider>,
+    );
 
     expect(lastFrame()).toContain('Press Ctrl+C again to exit.');
   });
@@ -126,7 +125,11 @@ describe('App', () => {
       ctrlDPressedOnce: true,
     } as UIState;
 
-    const { lastFrame } = renderWithProviders(<App />, ctrlDUIState);
+    const { lastFrame } = render(
+      <UIStateContext.Provider value={ctrlDUIState}>
+        <App />
+      </UIStateContext.Provider>,
+    );
 
     expect(lastFrame()).toContain('Press Ctrl+D again to exit.');
   });
@@ -134,7 +137,11 @@ describe('App', () => {
   it('should render ScreenReaderAppLayout when screen reader is enabled', () => {
     (useIsScreenReaderEnabled as vi.Mock).mockReturnValue(true);
 
-    const { lastFrame } = renderWithProviders(<App />, mockUIState as UIState);
+    const { lastFrame } = render(
+      <UIStateContext.Provider value={mockUIState as UIState}>
+        <App />
+      </UIStateContext.Provider>,
+    );
 
     expect(lastFrame()).toContain(
       'Notifications\nFooter\nMainContent\nComposer',
@@ -144,7 +151,11 @@ describe('App', () => {
   it('should render DefaultAppLayout when screen reader is not enabled', () => {
     (useIsScreenReaderEnabled as vi.Mock).mockReturnValue(false);
 
-    const { lastFrame } = renderWithProviders(<App />, mockUIState as UIState);
+    const { lastFrame } = render(
+      <UIStateContext.Provider value={mockUIState as UIState}>
+        <App />
+      </UIStateContext.Provider>,
+    );
 
     expect(lastFrame()).toContain('MainContent\nNotifications\nComposer');
   });

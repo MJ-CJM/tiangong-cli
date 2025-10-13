@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  Custom Models • Agent System • Intelligent Routing & Collaboration
+  Custom Models • Agent System • Intelligent Routing & Collaboration • Mode Switching
 </p>
 
 ---

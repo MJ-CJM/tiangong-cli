@@ -447,14 +447,19 @@ export interface WorkflowStep {
   /** Unique step identifier */
   id: string;
 
-  /** Agent to execute */
-  agent: string;
+  /** Step type: sequential (default) or parallel */
+  type?: 'sequential' | 'parallel';
 
   /** Step description */
   description?: string;
 
+  // ===== Sequential step fields (when type = 'sequential' or undefined) =====
+
+  /** Agent to execute (required for sequential steps) */
+  agent?: string;
+
   /** Input prompt (supports template variables like ${workflow.input}, ${stepId.output}) */
-  input: string;
+  input?: string;
 
   /** Condition to execute this step (JavaScript expression) */
   when?: string;
@@ -464,6 +469,19 @@ export interface WorkflowStep {
 
   /** Number of retry attempts on failure */
   retry?: number;
+
+  // ===== Parallel step fields (when type = 'parallel') =====
+
+  /** Parallel substeps (required for parallel steps) */
+  parallel?: WorkflowStep[];
+
+  /** Error handling for parallel groups */
+  error_handling?: {
+    /** What to do when substeps fail */
+    on_error: 'continue' | 'stop';
+    /** Minimum number of successful substeps required */
+    min_success?: number;
+  };
 }
 
 /**
@@ -496,13 +514,13 @@ export interface WorkflowStepResult {
   /** Step ID */
   stepId: string;
 
-  /** Agent name that executed */
-  agentName: string;
+  /** Agent name that executed (for sequential steps) */
+  agentName?: string;
 
   /** Execution status */
   status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
 
-  /** Agent output */
+  /** Agent output (for sequential steps) */
   output: string;
 
   /** Error message if failed */
@@ -516,6 +534,9 @@ export interface WorkflowStepResult {
 
   /** Extracted data for template variables */
   data?: Record<string, any>;
+
+  /** Parallel substep results (for parallel steps) */
+  parallelResults?: Map<string, WorkflowStepResult>;
 }
 
 /**

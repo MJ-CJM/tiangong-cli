@@ -134,12 +134,6 @@ export class AgentExecutor {
     const handoffTools = this.buildHandoffTools(agent);
     toolDefinitions.push(...handoffTools);
 
-    console.log(`[AgentExecutor] Tool definitions passed to model (${toolDefinitions.length}):`);
-    const mcpToolDefs = toolDefinitions.filter(t => t.name.includes('__'));
-    const handoffToolDefs = toolDefinitions.filter(t => t.name.startsWith('transfer_to_'));
-    console.log(`[AgentExecutor] MCP tool definitions (${mcpToolDefs.length}):`, mcpToolDefs.map(t => t.name));
-    console.log(`[AgentExecutor] Handoff tool definitions (${handoffToolDefs.length}):`, handoffToolDefs.map(t => t.name));
-
     // Execute with tool calling loop
     let totalTokensUsed = 0;
     const maxIterations = 10; // Prevent infinite loops
@@ -204,8 +198,6 @@ export class AgentExecutor {
 
         // Check if this is a handoff tool call
         if (this.isHandoffTool(name)) {
-          console.log(`[AgentExecutor] Detected handoff tool call: ${name}`);
-
           try {
             // Extract target agent from tool name
             const targetAgent = this.extractHandoffTarget(name);
@@ -354,6 +346,30 @@ export class AgentExecutor {
       // Continue loop to get final response
     }
 
+    // Check if we exited due to max iterations
+    if (iteration >= maxIterations) {
+      console.warn(`[AgentExecutor] WARNING: Agent '${agentName}' reached max iterations (${maxIterations}) without final text response`);
+      console.warn(`[AgentExecutor] This may indicate an infinite tool calling loop. Check agent prompt and contextMode configuration.`);
+
+      // Try to extract any text from the last response in context
+      if (finalText.length === 0) {
+        const lastMessages = context.conversationHistory.slice(-3);
+        for (const msg of lastMessages.reverse()) {
+          if (msg.role === MessageRole.ASSISTANT) {
+            const textFromMsg = msg.content
+              .filter(part => part.type === 'text')
+              .map(part => part.text || '')
+              .join('\n');
+
+            if (textFromMsg.length > 0) {
+              finalText = textFromMsg;
+              break;
+            }
+          }
+        }
+      }
+    }
+
     // Build response
     const executeResponse: AgentExecuteResponse = {
       agentName,
@@ -387,18 +403,12 @@ export class AgentExecutor {
       throw new Error('Router not initialized. Call initialize() first.');
     }
 
-    console.log('[AgentExecutor] Auto-routing user input...');
-
     // Route to best agent
     const routingResult = await this.router.route(prompt);
 
     if (!routingResult) {
       throw new Error('No suitable agent found for this request');
     }
-
-    console.log(
-      `[AgentExecutor] Routed to agent: ${routingResult.agent.name} (confidence: ${routingResult.confidence})`
-    );
 
     // Execute with routed agent
     const response = await this.execute(routingResult.agent.name, prompt, options);
@@ -426,10 +436,6 @@ export class AgentExecutor {
     if (!this.handoffManager) {
       throw new Error('HandoffManager not initialized. Call initialize() first.');
     }
-
-    console.log(
-      `[AgentExecutor] Executing handoff: ${handoffContext.from_agent} -> ${agentName}`
-    );
 
     // Notify about handoff via callback
     if (options.onHandoff) {
@@ -585,21 +591,15 @@ export class AgentExecutor {
   private async buildRuntime(agent: TiangongAgentDefinition): Promise<AgentRuntime> {
     // Get all available tools
     const allToolNames = this.toolRegistry.getAllToolNames();
-    console.log(`[AgentExecutor] Agent: ${agent.name}`);
-    console.log(`[AgentExecutor] All tools from registry (${allToolNames.length}):`, allToolNames.filter(t => t.includes('__')).slice(0, 10));
 
     // Get agent's allowed MCP servers
     const mcpServers = this.mcpRegistry.getServersForAgent(agent);
-    console.log(`[AgentExecutor] MCP servers for agent:`, mcpServers);
 
     // Filter out MCP tools from servers the agent is not allowed to use
     const toolsWithMCPFilter = this.filterMCPTools(allToolNames, mcpServers);
-    console.log(`[AgentExecutor] After MCP server filter (${toolsWithMCPFilter.length}):`, toolsWithMCPFilter.filter(t => t.includes('__')));
 
     // Filter tools based on agent's allow/deny lists
     const filteredTools = this.toolFilter.filterTools(toolsWithMCPFilter, agent);
-    console.log(`[AgentExecutor] After allow/deny filter (${filteredTools.length}):`, filteredTools.filter(t => t.includes('__')));
-    console.log(`[AgentExecutor] Final available tools:`, filteredTools);
 
     return {
       definition: agent,

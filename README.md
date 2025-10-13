@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./images/logo.jpg" alt="天工 CLI Logo" width="200"/>
+  <img src="./images/logo.jpg" alt="天宫 CLI Logo" width="200"/>
 </p>
 
 <p align="center">
@@ -9,7 +9,7 @@
   </strong>
 </p>
 
-# 天工 CLI (tiangong-cli)
+# 天宫 CLI (tiangong-cli)
 
 <p align="center">
   <strong>基于 Gemini CLI 的增强版 AI 命令行工具</strong>
@@ -23,7 +23,7 @@
 
 ## 📖 项目简介
 
-**天工 CLI** 是基于 [Google Gemini CLI](https://github.com/google-gemini/gemini-cli) 开发的增强版本，专为国内开发者优化。在保留原有强大功能的基础上，提供了丰富的核心扩展功能：
+**天宫 CLI** 是基于 [Google Gemini CLI](https://github.com/google-gemini/gemini-cli) 开发的增强版本，专为国内开发者优化。在保留原有强大功能的基础上，提供了丰富的核心扩展功能：
 
 ### 🎯 核心扩展功能
 
@@ -938,11 +938,11 @@ export GEMINI_ROUTING_CONFIDENCE_THRESHOLD=75
 
 ### 技术基础
 
-天工 CLI 基于 Google Gemini CLI 开发，完全兼容原有功能。我们在保留其强大能力的同时，针对国内开发者的需求进行了以下扩展：
+天宫 CLI 基于 Google Gemini CLI 开发，完全兼容原有功能。我们在保留其强大能力的同时，针对国内开发者的需求进行了以下扩展：
 
 ### 主要扩展
 
-| 扩展功能 | 原 Gemini CLI | 天工 CLI |
+| 扩展功能 | 原 Gemini CLI | 天宫 CLI |
 |---------|--------------|---------|
 | 自定义模型配置 | ❌ 仅支持 Gemini/OpenAI/Claude | ✅ 支持任意 OpenAI 兼容模型 |
 | 国内模型支持 | ❌ 无 | ✅ 通义千问、DeepSeek 等开箱即用 |
@@ -1028,7 +1028,7 @@ npm start
 ---
 
 <p align="center">
-  <strong>天工 CLI - 让 AI 开发更高效 🚀</strong>
+  <strong>天宫 CLI - 让 AI 开发更高效 🚀</strong>
 </p>
 
 <p align="center">

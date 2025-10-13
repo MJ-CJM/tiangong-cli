@@ -51,8 +51,15 @@
 
 ### 安装
 
-#### 方式一：NPM 全局安装（暂未支持）
+#### 方式一：NPM 全局安装（推荐）
 
+```bash
+# 全局安装
+npm install -g tiangong-cli
+
+# 启动
+tiangong-cli
+```
 
 #### 方式二：源码安装
 

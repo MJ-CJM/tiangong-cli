@@ -51,8 +51,15 @@
 
 ### Installation
 
-#### Method 1: NPM Global Install (Not Yet Supported)
+#### Method 1: NPM Global Install (Recommended)
 
+```bash
+# Global install
+npm install -g tiangong-cli
+
+# Start
+tiangong-cli
+```
 
 #### Method 2: Install from Source
 

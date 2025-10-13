@@ -2,6 +2,13 @@
   <img src="./images/logo.jpg" alt="天工 CLI Logo" width="200"/>
 </p>
 
+<p align="center">
+  <strong>
+    <a href="README.md">简体中文</a> | 
+    <a href="README_EN.md">English</a>
+  </strong>
+</p>
+
 # 天工 CLI (tiangong-cli)
 
 <p align="center">
@@ -25,7 +32,7 @@
 | 🤖 **自定义模型支持** | 零代码配置接入通义千问、DeepSeek、本地模型等 | ✅ 已完成 |
 | 🎭 **Agents 智能体系统** | 创建专业化 AI 助手，独立上下文和工具权限 | ✅ 已完成 |
 | 🧭 **智能路由与移交** | 自动选择最佳 Agent，支持 Agent 间协作 | ✅ 已完成 |
-| 🔄 **Workflow 工作流** | 多 Agent 编排，预定义执行流程 | 🚧 开发中 (60%) |
+| 🔄 **Workflow 工作流** | 多 Agent 编排，支持顺序和并行执行 | ✅ 已完成 |
 | 🎯 **模式切换系统** | Plan、Spec、Code 等专业模式切换 | 📋 计划中 |
 
 ### ⚡ 继承的强大功能
@@ -398,19 +405,21 @@ code_review agent 专注于代码审查，当检测到用户实际想要**实现
 
 ---
 
-### 4️⃣ Workflow 工作流 🚧
+### 4️⃣ Workflow 工作流 ✅
 
-多 Agent 编排系统，支持预定义复杂的执行流程。
+多 Agent 编排系统，支持预定义复杂的执行流程，显著提升开发效率。
 
 #### 核心特性
 
 - 📋 **YAML 配置**：使用 YAML 文件定义工作流
-- 🔗 **步骤编排**：顺序执行多个 Agent 任务
+- 🔗 **顺序执行**：按步骤依次执行多个 Agent 任务
+- ⚡ **并行执行**：多个 Agent 同时运行，时间减半
 - 🎯 **条件执行**：支持 when 表达式控制执行逻辑
-- 🔄 **错误处理**：continue/stop/retry 策略
-- 📊 **模板变量**：步骤间数据传递和引用
+- 🔄 **错误处理**：continue/stop/retry 策略，min_success 配置
+- 📊 **模板变量**：步骤间数据传递和嵌套引用
+- 🏷️ **智能路由**：支持触发器自动匹配
 
-#### 工作流示例
+#### 顺序工作流示例
 
 ```yaml
 # .gemini/workflows/code-quality-pipeline.yaml
@@ -433,8 +442,8 @@ steps:
   - id: fix
     agent: code_imple
     description: "修复发现的问题"
-    when: "${review.issues_found} > 0"
-    input: "修复以下问题：${review.issues}"
+    when: "${review.data.issues_found} > 0"
+    input: "修复以下问题：${review.output}"
 
   - id: test
     agent: test_writer
@@ -449,22 +458,112 @@ timeout: 600000  # 10 分钟
 ---
 ```
 
+#### 并行工作流示例 ⭐
+
+```yaml
+# .gemini/workflows/parallel-review.yaml
+---
+kind: workflow
+name: parallel-review
+title: 并行代码审查
+description: 两个审查员并行审查，专业汇总，统一修复
+
+steps:
+  # Step 1: 并行审查（同时执行，时间减半）
+  - type: parallel
+    id: dual_review
+    description: "两个审查员并行审查代码"
+    parallel:
+      - id: reviewer_a
+        agent: code_review
+        description: "代码质量审查"
+        input: "审查文件：${workflow.input}"
+        timeout: 90000
+
+      - id: reviewer_b
+        agent: code_review_pro
+        description: "安全审查"
+        input: "安全审查：${workflow.input}"
+        timeout: 90000
+
+    timeout: 120000
+    error_handling:
+      on_error: continue
+      min_success: 1  # 至少一个成功即可
+
+  # Step 2: 汇总审查结果
+  - id: aggregate_reviews
+    agent: review_aggregator
+    description: "汇总两个审查员的意见"
+    input: |
+      汇总以下审查意见：
+      质量审查：${dual_review.reviewer_a.output}
+      安全审查：${dual_review.reviewer_b.output}
+
+  # Step 3: 统一修复
+  - id: implement_fixes
+    agent: code_imple
+    description: "根据汇总报告修复代码"
+    input: "修复问题：${aggregate_reviews.output}"
+
+error_handling:
+  on_error: continue
+
+timeout: 600000
+---
+```
+
+**并行执行优势**：
+- ⚡ **速度提升 50%**：两个审查员同时工作
+- 🎯 **多维度分析**：质量 + 安全双重保障
+- 📊 **智能汇总**：专业 Agent 去重和分类问题
+- 🔧 **一键完成**：审查、汇总、修复全自动
+
 #### 使用工作流
 
 ```bash
-# 列出所有工作流（待实现）
+# 列出所有工作流
 /workflow list
 
-# 运行工作流（待实现）
-/workflow run code-quality-pipeline "src/auth.ts"
+# 运行工作流
+/workflow run parallel-review "src/auth.ts"
 
-# 查看工作流详情（待实现）
-/workflow info code-quality-pipeline
+# 查看工作流详情
+/workflow info parallel-review
+
+# 验证工作流定义
+/workflow validate parallel-review
+
+# 删除工作流
+/workflow delete old-workflow
 ```
 
-**当前状态**：核心框架已完成（WorkflowManager、WorkflowExecutor），CLI 集成开发中
+#### 模板变量系统
 
-<!-- 📚 **详细文档**：[Workflow 系统设计](./design/agents/WORKFLOW_DESIGN.md) | [实现进度](./WORKFLOW_PROGRESS.md) -->
+支持丰富的变量引用：
+
+```yaml
+# 用户输入
+${workflow.input}
+
+# 步骤输出
+${stepId.output}
+
+# 提取的数据
+${stepId.data.key}
+
+# 并行子步骤输出（嵌套引用）
+${parallelGroupId.substepId.output}
+
+# 并行组聚合数据
+${parallelGroupId.data.success_count}
+${parallelGroupId.data.failed_count}
+${parallelGroupId.data.total_count}
+```
+
+**当前状态**：✅ 已完成，包括 WorkflowManager、WorkflowExecutor、CLI 集成、并行执行、完整文档
+
+📚 **详细文档**：[Workflow 完整指南](./docs/WORKFLOWS.md) | [系统设计](./design/agents/WORKFLOW_DESIGN.md)
 
 ---
 
@@ -580,6 +679,25 @@ Response: { token, user }
 # 测试路由
 /agents route "你的提示词"
 /agents route "你的提示词" --execute
+```
+
+### Workflow 管理
+
+```bash
+# 列出所有 Workflow
+/workflow list
+
+# 查看 Workflow 详情
+/workflow info <workflow-name>
+
+# 执行 Workflow
+/workflow run <workflow-name> "<input>"
+
+# 验证 Workflow 定义
+/workflow validate <workflow-name>
+
+# 删除 Workflow
+/workflow delete <workflow-name>
 ```
 
 ### 通用命令
@@ -831,7 +949,8 @@ export GEMINI_ROUTING_CONFIDENCE_THRESHOLD=75
 | Agents 系统 | ⚠️ 基础功能 | ✅ 完整的智能体系统 |
 | 智能路由 | ❌ 无 | ✅ 自动选择最佳 Agent |
 | Agent 移交 | ❌ 无 | ✅ Agent 间智能协作 |
-| Workflow 工作流 | ❌ 无 | 🚧 多 Agent 编排（开发中） |
+| Workflow 顺序执行 | ❌ 无 | ✅ 多 Agent 顺序编排 |
+| Workflow 并行执行 | ❌ 无 | ✅ 多 Agent 并行执行，显著提速 |
 | 模式切换 | ❌ 无 | 📋 专业模式系统（计划中） |
 | 中文文档 | ❌ 英文为主 | ✅ 完整中文文档 |
 

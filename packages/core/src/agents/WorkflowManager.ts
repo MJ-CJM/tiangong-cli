@@ -197,19 +197,70 @@ export class WorkflowManager {
           stepIds.add(step.id);
         }
 
-        // Validate agent name
-        if (!step.agent || typeof step.agent !== 'string') {
-          errors.push(`Step ${index + 1} (${step.id}): Missing or invalid agent name`);
-        }
+        // Check step type
+        const isParallel = step.type === 'parallel';
 
-        // Validate input
-        if (!step.input || typeof step.input !== 'string') {
-          errors.push(`Step ${index + 1} (${step.id}): Missing or invalid input`);
-        }
+        if (isParallel) {
+          // Validate parallel step
+          if (!step.parallel || !Array.isArray(step.parallel) || step.parallel.length === 0) {
+            errors.push(`Step ${index + 1} (${step.id}): Parallel step must have at least one substep`);
+          } else {
+            // Validate substeps
+            const subStepIds = new Set<string>();
+            step.parallel.forEach((subStep, subIndex) => {
+              // Validate substep ID
+              if (!subStep.id || typeof subStep.id !== 'string') {
+                errors.push(`Step ${index + 1} (${step.id}), substep ${subIndex + 1}: Missing or invalid substep ID`);
+              } else if (subStepIds.has(subStep.id)) {
+                errors.push(`Step ${index + 1} (${step.id}), substep ${subIndex + 1}: Duplicate substep ID '${subStep.id}'`);
+              } else {
+                subStepIds.add(subStep.id);
+              }
 
-        // Validate condition (if present)
-        if (step.when && typeof step.when !== 'string') {
-          errors.push(`Step ${index + 1} (${step.id}): Invalid condition expression`);
+              // Validate substep agent
+              if (!subStep.agent || typeof subStep.agent !== 'string') {
+                errors.push(`Step ${index + 1} (${step.id}), substep ${subIndex + 1} (${subStep.id}): Missing or invalid agent name`);
+              }
+
+              // Validate substep input
+              if (!subStep.input || typeof subStep.input !== 'string') {
+                errors.push(`Step ${index + 1} (${step.id}), substep ${subIndex + 1} (${subStep.id}): Missing or invalid input`);
+              }
+            });
+          }
+
+          // Validate error handling for parallel group
+          if (step.error_handling) {
+            const validActions = ['continue', 'stop'];
+            if (!validActions.includes(step.error_handling.on_error)) {
+              errors.push(`Step ${index + 1} (${step.id}): Invalid error handling action: ${step.error_handling.on_error}`);
+            }
+
+            if (step.error_handling.min_success !== undefined) {
+              if (typeof step.error_handling.min_success !== 'number' || step.error_handling.min_success < 1) {
+                errors.push(`Step ${index + 1} (${step.id}): min_success must be a positive number`);
+              }
+              if (step.parallel && step.error_handling.min_success > step.parallel.length) {
+                errors.push(`Step ${index + 1} (${step.id}): min_success (${step.error_handling.min_success}) cannot exceed number of substeps (${step.parallel.length})`);
+              }
+            }
+          }
+        } else {
+          // Validate sequential step
+          // Validate agent name
+          if (!step.agent || typeof step.agent !== 'string') {
+            errors.push(`Step ${index + 1} (${step.id}): Missing or invalid agent name`);
+          }
+
+          // Validate input
+          if (!step.input || typeof step.input !== 'string') {
+            errors.push(`Step ${index + 1} (${step.id}): Missing or invalid input`);
+          }
+
+          // Validate condition (if present)
+          if (step.when && typeof step.when !== 'string') {
+            errors.push(`Step ${index + 1} (${step.id}): Invalid condition expression`);
+          }
         }
       });
     }

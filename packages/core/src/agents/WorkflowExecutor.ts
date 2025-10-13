@@ -35,6 +35,8 @@ export class WorkflowExecutor {
       onStepStart?: (step: WorkflowStep, index: number, total: number) => void;
       onStepComplete?: (result: WorkflowStepResult) => void;
       onStepError?: (error: Error, step: WorkflowStep) => void;
+      onToolCall?: (toolName: string, args: any, stepId: string) => void;
+      onToolResult?: (toolName: string, result: any, stepId: string) => void;
     }
   ): Promise<WorkflowExecutionResult> {
     const workflow = this.workflowManager.getWorkflow(workflowName);
@@ -90,7 +92,7 @@ export class WorkflowExecutor {
 
         // Execute step
         try {
-          const result = await this.executeStep(step, context, workflow);
+          const result = await this.executeStep(step, context, workflow, options);
           results.push(result);
           context.stepResults.set(step.id, result);
 
@@ -175,23 +177,69 @@ export class WorkflowExecutor {
   }
 
   /**
-   * Execute a single step
+   * Execute a single step (routes to sequential or parallel execution)
    */
   private async executeStep(
     step: WorkflowStep,
     context: WorkflowContext,
-    workflow: WorkflowDefinition
+    workflow: WorkflowDefinition,
+    options?: {
+      onToolCall?: (toolName: string, args: any, stepId: string) => void;
+      onToolResult?: (toolName: string, result: any, stepId: string) => void;
+    }
+  ): Promise<WorkflowStepResult> {
+    // Route to parallel or sequential execution
+    if (step.type === 'parallel') {
+      return await this.executeParallelStep(step, context, workflow, options);
+    } else {
+      return await this.executeSequentialStep(step, context, workflow, options);
+    }
+  }
+
+  /**
+   * Execute a sequential step (single agent)
+   */
+  private async executeSequentialStep(
+    step: WorkflowStep,
+    context: WorkflowContext,
+    workflow: WorkflowDefinition,
+    options?: {
+      onToolCall?: (toolName: string, args: any, stepId: string) => void;
+      onToolResult?: (toolName: string, result: any, stepId: string) => void;
+    }
   ): Promise<WorkflowStepResult> {
     const startTime = Date.now();
 
     try {
+      // Validate required fields for sequential step
+      if (!step.agent) {
+        throw new WorkflowError(
+          `Sequential step '${step.id}' missing required field: agent`,
+          'INVALID_DEFINITION'
+        );
+      }
+      if (!step.input) {
+        throw new WorkflowError(
+          `Sequential step '${step.id}' missing required field: input`,
+          'INVALID_DEFINITION'
+        );
+      }
+
       // Render input template
       const renderedInput = this.renderTemplate(step.input, context);
 
-      // Execute agent
+      // Execute agent with tool callbacks
       const agentResult = await this.agentExecutor.execute(
         step.agent,
-        renderedInput
+        renderedInput,
+        {
+          onToolCall: options?.onToolCall ? (toolName: string, args: any) => {
+            options.onToolCall!(toolName, args, step.id);
+          } : undefined,
+          onToolResult: options?.onToolResult ? (toolName: string, result: any) => {
+            options.onToolResult!(toolName, result, step.id);
+          } : undefined,
+        }
       );
 
       const output = agentResult.text || '';
@@ -212,6 +260,146 @@ export class WorkflowExecutor {
       return {
         stepId: step.id,
         agentName: step.agent,
+        status: 'failed',
+        output: '',
+        error: errorMessage,
+        startTime,
+        endTime: Date.now(),
+      };
+    }
+  }
+
+  /**
+   * Execute a parallel step (multiple agents concurrently)
+   */
+  private async executeParallelStep(
+    step: WorkflowStep,
+    context: WorkflowContext,
+    workflow: WorkflowDefinition,
+    options?: {
+      onToolCall?: (toolName: string, args: any, stepId: string) => void;
+      onToolResult?: (toolName: string, result: any, stepId: string) => void;
+    }
+  ): Promise<WorkflowStepResult> {
+    const startTime = Date.now();
+
+    try {
+      // Validate parallel step
+      if (!step.parallel || step.parallel.length === 0) {
+        throw new WorkflowError(
+          `Parallel step '${step.id}' has no substeps`,
+          'INVALID_DEFINITION'
+        );
+      }
+
+      const parallelSteps = step.parallel;
+      const parallelResults = new Map<string, WorkflowStepResult>();
+
+      // Execute all substeps in parallel using Promise.allSettled
+      const promises = parallelSteps.map(async (subStep) => {
+        try {
+          // Execute substep (always sequential inside parallel group)
+          return await this.executeSequentialStep(subStep, context, workflow, options);
+        } catch (error) {
+          // Return failed result instead of throwing
+          return {
+            stepId: subStep.id,
+            agentName: subStep.agent || 'unknown',
+            status: 'failed' as const,
+            output: '',
+            error: error instanceof Error ? error.message : String(error),
+            startTime: Date.now(),
+            endTime: Date.now(),
+          };
+        }
+      });
+
+      const settledResults = await Promise.allSettled(promises);
+
+      // Process results
+      let successCount = 0;
+      let failedCount = 0;
+      const outputs: string[] = [];
+      const errors: string[] = [];
+
+      settledResults.forEach((settled, index) => {
+        const subStep = parallelSteps[index];
+        let result: WorkflowStepResult;
+
+        if (settled.status === 'fulfilled') {
+          result = settled.value;
+        } else {
+          // Promise rejected (shouldn't happen with our try-catch, but handle it)
+          result = {
+            stepId: subStep.id,
+            agentName: subStep.agent || 'unknown',
+            status: 'failed',
+            output: '',
+            error: settled.reason instanceof Error ? settled.reason.message : String(settled.reason),
+            startTime,
+            endTime: Date.now(),
+          };
+        }
+
+        // Store result
+        parallelResults.set(subStep.id, result);
+
+        // Count successes and failures
+        if (result.status === 'completed') {
+          successCount++;
+          outputs.push(`**${subStep.id}**: ${result.output}`);
+        } else if (result.status === 'failed') {
+          failedCount++;
+          errors.push(`**${subStep.id}**: ${result.error}`);
+        }
+      });
+
+      // Determine overall status based on error handling config
+      const errorHandling = step.error_handling || {
+        on_error: 'continue',
+        min_success: parallelSteps.length, // All must succeed by default
+      };
+
+      const minSuccess = errorHandling.min_success || parallelSteps.length;
+      const overallSuccess = successCount >= minSuccess;
+
+      // Build aggregated output
+      let aggregatedOutput = `# Parallel Group: ${step.id}\n\n`;
+      aggregatedOutput += `**Results**: ${successCount}/${parallelSteps.length} succeeded`;
+      if (failedCount > 0) {
+        aggregatedOutput += `, ${failedCount} failed`;
+      }
+      aggregatedOutput += `\n\n`;
+
+      if (outputs.length > 0) {
+        aggregatedOutput += `## Successful Results:\n\n${outputs.join('\n\n')}\n\n`;
+      }
+
+      if (errors.length > 0) {
+        aggregatedOutput += `## Errors:\n\n${errors.join('\n\n')}\n\n`;
+      }
+
+      // Return parallel group result
+      return {
+        stepId: step.id,
+        status: overallSuccess ? 'completed' : 'failed',
+        output: aggregatedOutput,
+        error: overallSuccess ? undefined : `Only ${successCount}/${parallelSteps.length} succeeded, required: ${minSuccess}`,
+        startTime,
+        endTime: Date.now(),
+        parallelResults,
+        data: {
+          success_count: successCount,
+          failed_count: failedCount,
+          total_count: parallelSteps.length,
+        },
+      };
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+
+      return {
+        stepId: step.id,
         status: 'failed',
         output: '',
         error: errorMessage,
@@ -264,7 +452,12 @@ export class WorkflowExecutor {
 
   /**
    * Render template variables in a string
-   * Supports: ${workflow.input}, ${stepId.output}, ${stepId.data.key}
+   * Supports:
+   * - ${workflow.input}
+   * - ${stepId.output}
+   * - ${stepId.data.key}
+   * - ${parallelGroupId.subStepId.output} (for parallel groups)
+   * - ${parallelGroupId.subStepId.data.key}
    */
   private renderTemplate(template: string, context: WorkflowContext): string {
     let rendered = template;
@@ -272,14 +465,34 @@ export class WorkflowExecutor {
     // Replace ${workflow.input}
     rendered = rendered.replace(/\$\{workflow\.input\}/g, context.input);
 
-    // Replace ${stepId.output}
-    const outputRegex = /\$\{(\w+)\.output\}/g;
-    rendered = rendered.replace(outputRegex, (match, stepId) => {
-      const result = context.stepResults.get(stepId);
-      return result?.output || '';
+    // Replace ${parallelGroupId.subStepId.data.key} FIRST (most specific)
+    const parallelDataRegex = /\$\{(\w+)\.(\w+)\.data\.(\w+)\}/g;
+    rendered = rendered.replace(parallelDataRegex, (match, groupId, subStepId, key) => {
+      const groupResult = context.stepResults.get(groupId);
+      if (groupResult?.parallelResults) {
+        const subResult = groupResult.parallelResults.get(subStepId);
+        if (subResult?.data && key in subResult.data) {
+          return String(subResult.data[key]);
+        }
+      }
+      return '';
     });
 
-    // Replace ${stepId.data.key}
+    // Replace ${parallelGroupId.subStepId.output} (parallel group substep output)
+    const parallelOutputRegex = /\$\{(\w+)\.(\w+)\.output\}/g;
+    rendered = rendered.replace(parallelOutputRegex, (match, groupId, subStepId) => {
+      const groupResult = context.stepResults.get(groupId);
+      if (groupResult?.parallelResults) {
+        const subResult = groupResult.parallelResults.get(subStepId);
+        const output = subResult?.output || '';
+        console.log(`[WorkflowExecutor] Resolved parallel template: ${match} → ${output.substring(0, 100)}...`);
+        return output;
+      }
+      // If not a parallel group, leave it for the next regex to handle
+      return match;
+    });
+
+    // Replace ${stepId.data.key} (normal step data)
     const dataRegex = /\$\{(\w+)\.data\.(\w+)\}/g;
     rendered = rendered.replace(dataRegex, (match, stepId, key) => {
       const result = context.stepResults.get(stepId);
@@ -289,6 +502,16 @@ export class WorkflowExecutor {
       return '';
     });
 
+    // Replace ${stepId.output} (normal step output) - LAST
+    const outputRegex = /\$\{(\w+)\.output\}/g;
+    rendered = rendered.replace(outputRegex, (match, stepId) => {
+      const result = context.stepResults.get(stepId);
+      const output = result?.output || '';
+      console.log(`[WorkflowExecutor] Resolved template: ${match} → ${output.substring(0, 100)}...`);
+      return output;
+    });
+
+    console.log(`[WorkflowExecutor] Template rendering complete. Input length: ${template.length}, Output length: ${rendered.length}`);
     return rendered;
   }
 

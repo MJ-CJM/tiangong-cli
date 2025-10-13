@@ -7,7 +7,7 @@
 import {
   AgentContentGenerator,
 } from '@google/gemini-cli-core';
-import { MessageType } from '../types.js';
+import { MessageType, ToolCallStatus, type IndividualToolCallDisplay } from '../types.js';
 import {
   type CommandContext,
   type SlashCommand,
@@ -1297,9 +1297,6 @@ ${useAI ? `💡 **Tip:**
           // Get global AgentExecutor (maintains context across invocations)
           const executor = await context.services.config.getAgentExecutor();
 
-          // Get tool registry for callback display
-          const toolRegistry = context.services.config.getToolRegistry();
-
           // Execute agent with callbacks
           const result = await executor.execute(agentName, prompt, {
             contextMode,
@@ -1320,30 +1317,21 @@ ${useAI ? `💡 **Tip:**
             },
             // Callback when tool is called
             onToolCall: (toolName: string, args: any) => {
-              // Format tool display name
-              const tool = toolRegistry.getTool(toolName);
-              const displayName = tool?.displayName || toolName;
+              // Create a tool display similar to workflow and main session
+              const toolDisplay: IndividualToolCallDisplay = {
+                callId: `agent-${agentName}-${toolName}-${Date.now()}`,
+                name: toolName,
+                description: toolName,
+                status: ToolCallStatus.Success,
+                resultDisplay: undefined,
+                confirmationDetails: undefined,
+              };
 
-              // Format args for display
-              let argsText = '';
-              if (args && typeof args === 'object') {
-                const keys = Object.keys(args);
-                if (keys.length > 0) {
-                  // Show first argument value (usually file path or main param)
-                  const firstKey = keys[0];
-                  const firstValue = args[firstKey];
-                  if (typeof firstValue === 'string' && firstValue.length < 100) {
-                    argsText = ` ${firstValue}`;
-                  }
-                }
-              }
-
-              // Display tool call (like main chat)
               context.ui.addItem(
                 {
-                  type: MessageType.INFO,
-                  text: `\n ╭${'─'.repeat(Math.min(displayName.length + argsText.length + 6, 80))}╮\n │ ✓  ${displayName}${argsText} │\n ╰${'─'.repeat(Math.min(displayName.length + argsText.length + 6, 80))}╯`,
-                },
+                  type: 'tool_group',
+                  tools: [toolDisplay],
+                } as any,
                 Date.now()
               );
             },

@@ -303,6 +303,8 @@ export class Config {
   private toolRegistry!: ToolRegistry;
   private promptRegistry!: PromptRegistry;
   private agentExecutor: AgentExecutor | null = null;
+  private workflowManager: import('../agents/WorkflowManager.js').WorkflowManager | null = null;
+  private workflowExecutor: import('../agents/WorkflowExecutor.js').WorkflowExecutor | null = null;
   private readonly sessionId: string;
   private fileSystemService: FileSystemService;
   private contentGeneratorConfig!: ContentGeneratorConfig;
@@ -797,6 +799,40 @@ export class Config {
     const unifiedMessages = convertGeminiToUnifiedMessages(history);
     const contextManager = this.agentExecutor!.getContextManager();
     contextManager.setMainSessionContext(unifiedMessages);
+  }
+
+  /**
+   * Get or create the global WorkflowManager instance
+   *
+   * This manages workflow definitions loaded from YAML files.
+   */
+  async getWorkflowManager(): Promise<import('../agents/WorkflowManager.js').WorkflowManager> {
+    if (!this.workflowManager) {
+      const { WorkflowManager } = await import('../agents/WorkflowManager.js');
+      this.workflowManager = new WorkflowManager(this);
+      await this.workflowManager.loadWorkflows();
+    }
+
+    return this.workflowManager;
+  }
+
+  /**
+   * Get or create the global WorkflowExecutor instance
+   *
+   * This executes workflow steps using the AgentExecutor.
+   */
+  async getWorkflowExecutor(): Promise<import('../agents/WorkflowExecutor.js').WorkflowExecutor> {
+    if (!this.workflowExecutor) {
+      const { WorkflowExecutor } = await import('../agents/WorkflowExecutor.js');
+
+      // Ensure AgentExecutor and WorkflowManager are initialized
+      const agentExecutor = await this.getAgentExecutor();
+      const workflowManager = await this.getWorkflowManager();
+
+      this.workflowExecutor = new WorkflowExecutor(agentExecutor, workflowManager);
+    }
+
+    return this.workflowExecutor;
   }
 
   getDebugMode(): boolean {

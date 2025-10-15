@@ -53,3 +53,9 @@ gha-creds-*.json
 
 # Log files
 patch_output.log
+
+# operator log
+op_log/*
+
+# speech
+lecture/*

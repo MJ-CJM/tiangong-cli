@@ -1724,13 +1724,19 @@ ${useAI ? `💡 **Tip:**
           if (subCmd === 'show') {
             // Show current configuration
             const config = router.getConfig();
+            const currentSessionModel = context.services.config?.getModel() || 'unknown';
+
             let message = `⚙️  **Routing Configuration**\n\n`;
             message += `**Enabled**: ${config.enabled ? '✅ Yes' : '❌ No'}\n`;
             message += `**Strategy**: ${config.strategy}\n`;
             message += `**Confidence Threshold**: ${config.rule.confidence_threshold}\n`;
-            message += `**LLM Model**: ${config.llm.model}\n`;
-            message += `**LLM Timeout**: ${config.llm.timeout}ms\n`;
             message += `**Fallback**: ${config.fallback}\n\n`;
+            message += `📊 **Model Configuration**:\n`;
+            message += `**Current Session Model**: ${currentSessionModel}\n`;
+            message += `  └─ Used for: Main chat, agent execution\n`;
+            message += `**Routing LLM Model**: ${config.llm.model}\n`;
+            message += `  └─ Used for: Intelligent agent selection (LLM/Hybrid routing)\n`;
+            message += `**LLM Timeout**: ${config.llm.timeout}ms\n\n`;
             message += `💡 **Available Commands**:\n`;
             message += `- \`/agents config show\` - Show current config\n`;
             message += `- \`/agents config enable\` - Enable routing\n`;

@@ -55,6 +55,15 @@ export class Router {
     // Load configuration with proper priority
     this.config = this.loadConfiguration(runtimeConfig);
 
+    // If no LLM model specified in config, use current session model as default
+    if (!this.config.llm.model || this.config.llm.model === 'gemini-2.0-flash') {
+      const currentModel = this.cliConfig.getModel();
+      if (currentModel) {
+        this.config.llm.model = currentModel;
+        console.log(`[Router] Using current session model for routing: ${currentModel}`);
+      }
+    }
+
     // Initialize routers
     this.ruleRouter = new RuleRouter(agentManager);
     this.llmRouter = new LLMRouter(agentManager, modelService, this.config.llm);

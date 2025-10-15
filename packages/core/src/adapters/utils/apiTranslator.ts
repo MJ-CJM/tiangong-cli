@@ -324,7 +324,7 @@ export class APITranslator {
    * @param supportsMultimodal Whether the target model supports multimodal content format
    */
   static unifiedToOpenaiRequest(request: UnifiedRequest, supportsMultimodal: boolean = true): any {
-    const messages = request.messages.map(msg => this.unifiedToOpenaiMessage(msg, supportsMultimodal));
+    let messages = request.messages.map(msg => this.unifiedToOpenaiMessage(msg, supportsMultimodal));
 
     // Add system message if provided
     if (request.systemMessage) {
@@ -345,6 +345,18 @@ export class APITranslator {
           hasToolCalls: !!msg.tool_calls,
           preview: typeof msg.content === 'string' ? msg.content.substring(0, 50) : 'array'
         });
+      });
+    }
+
+    // Validate and fix tool_calls to ensure API compliance
+    const originalCount = messages.length;
+    messages = this.validateAndFixToolCalls(messages);
+    
+    if (process.env['DEBUG_MESSAGE_FORMAT'] && originalCount !== messages.length) {
+      console.log('[DEBUG] Message validation:', {
+        originalCount,
+        validatedCount: messages.length,
+        removed: originalCount - messages.length
       });
     }
 
@@ -603,5 +615,96 @@ export class APITranslator {
     }
 
     return repaired;
+  }
+
+  /**
+   * Validate and fix tool_calls in message history to ensure API compliance
+   * OpenAI-compatible APIs require that every assistant message with tool_calls
+   * must be followed by tool response messages for each tool_call_id
+   */
+  private static validateAndFixToolCalls(messages: any[]): any[] {
+    const validatedMessages: any[] = [];
+    
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i];
+      
+      // If this is an assistant message with tool_calls
+      if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
+        const toolCallIds = msg.tool_calls.map((tc: any) => tc.id);
+        
+        // Check if all tool_calls have corresponding responses
+        const hasAllResponses = this.checkToolResponses(toolCallIds, messages, i + 1);
+        
+        if (!hasAllResponses) {
+          // This assistant message has tool_calls without proper responses
+          // We need to either skip it or strip the tool_calls
+          console.warn(
+            `[APITranslator] Removing incomplete tool_calls from assistant message at index ${i}. ` +
+            `Tool call IDs: ${toolCallIds.join(', ')}`
+          );
+          
+          // Check if the message has meaningful text content
+          let hasTextContent = false;
+          if (msg.content) {
+            if (typeof msg.content === 'string') {
+              hasTextContent = msg.content.trim().length > 0;
+            } else if (Array.isArray(msg.content)) {
+              hasTextContent = msg.content.some((part: any) => 
+                part.type === 'text' && part.text && part.text.trim().length > 0
+              );
+            }
+          }
+          
+          // If the message has text content, preserve it without tool_calls
+          if (hasTextContent) {
+            const cleanedMsg: any = {
+              role: 'assistant',
+              content: msg.content
+            };
+            validatedMessages.push(cleanedMsg);
+          }
+          // If no content, skip this message entirely
+          continue;
+        }
+      }
+      
+      validatedMessages.push(msg);
+    }
+    
+    return validatedMessages;
+  }
+
+  /**
+   * Check if all tool_call_ids have corresponding tool response messages
+   * @param toolCallIds Array of tool call IDs to check
+   * @param messages Full message array
+   * @param startIndex Index to start searching from
+   * @returns true if all tool calls have responses, false otherwise
+   */
+  private static checkToolResponses(
+    toolCallIds: string[],
+    messages: any[],
+    startIndex: number
+  ): boolean {
+    const foundIds = new Set<string>();
+    
+    // Search through subsequent messages for tool responses
+    for (let i = startIndex; i < messages.length; i++) {
+      const msg = messages[i];
+      
+      // Stop searching if we encounter another assistant message
+      // (tool responses must come immediately after the assistant message with tool_calls)
+      if (msg.role === 'assistant') {
+        break;
+      }
+      
+      // Collect tool response IDs
+      if (msg.role === 'tool' && msg.tool_call_id) {
+        foundIds.add(msg.tool_call_id);
+      }
+    }
+    
+    // Check if all tool_call_ids have corresponding responses
+    return toolCallIds.every(id => foundIds.has(id));
   }
 }

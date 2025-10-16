@@ -37,6 +37,8 @@ import { terminalSetupCommand } from '../ui/commands/terminalSetupCommand.js';
 import { modelCommand } from '../ui/commands/modelCommand.js';
 import { agentsCommand } from '../ui/commands/agentsCommand.js';
 import { workflowCommand } from '../ui/commands/workflowCommand.js';
+import { planCommand } from '../ui/commands/planCommand.js';
+import { todosCommand } from '../ui/commands/todosCommand.js';
 
 /**
  * Loads the core, hard-coded slash commands that are an integral part
@@ -73,11 +75,13 @@ export class BuiltinCommandLoader implements ICommandLoader {
       mcpCommand,
       memoryCommand,
       modelCommand,
+      planCommand,
       privacyCommand,
       quitCommand,
       restoreCommand(this.config),
       statsCommand,
       themeCommand,
+      todosCommand,
       toolsCommand,
       settingsCommand,
       vimCommand,

@@ -71,6 +71,7 @@ export interface InputPromptProps {
   onEscapePromptChange?: (showPrompt: boolean) => void;
   vimHandleInput?: (key: Key) => boolean;
   isEmbeddedShellFocused?: boolean;
+  planModeActive?: boolean;
 }
 
 // The input content, input container, and input suggestions list may have different widths
@@ -107,6 +108,7 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
   onEscapePromptChange,
   vimHandleInput,
   isEmbeddedShellFocused,
+  planModeActive,
 }) => {
   const kittyProtocol = useKittyKeyboardProtocol();
   const isShellFocused = useShellFocusState();
@@ -889,7 +891,9 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
           color={statusColor ?? theme.text.accent}
           aria-label={statusText || undefined}
         >
-          {shellModeActive ? (
+          {planModeActive ? (
+            <Text color={theme.text.accent}>[PLAN] {'>'}</Text>
+          ) : shellModeActive ? (
             reverseSearchActive ? (
               <Text
                 color={theme.text.link}

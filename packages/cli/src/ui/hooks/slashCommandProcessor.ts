@@ -72,6 +72,22 @@ export const useSlashCommandProcessor = (
   actions: SlashCommandProcessorActions,
   extensionsUpdateState: Map<string, ExtensionUpdateStatus>,
   isConfigInitialized: boolean,
+  planTodoState?: {
+    todos: any[];
+    setTodos: (todos: any[]) => void;
+    updateTodo: (id: string, updates: any) => void;
+    currentPlan: any;
+    setCurrentPlan: (plan: any) => void;
+    planModeActive: boolean;
+    executionQueue: {
+      active: boolean;
+      mode: 'default' | 'auto_edit';
+      currentIndex: number;
+      totalCount: number;
+      executingTodoId: string | null;
+    } | null;
+    setExecutionQueue: (queue: any) => void;
+  },
 ) => {
   const session = useSessionStats();
   const [commands, setCommands] = useState<readonly SlashCommand[]>([]);
@@ -210,7 +226,8 @@ export const useSlashCommandProcessor = (
       session: {
         stats: session.stats,
         sessionShellAllowlist,
-      },
+        ...(planTodoState || {}),
+      } as any,
     }),
     [
       config,
@@ -230,6 +247,7 @@ export const useSlashCommandProcessor = (
       setGeminiMdFileCount,
       reloadCommands,
       extensionsUpdateState,
+      planTodoState,
     ],
   );
 

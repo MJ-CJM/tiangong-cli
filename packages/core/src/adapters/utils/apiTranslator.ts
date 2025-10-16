@@ -624,9 +624,18 @@ export class APITranslator {
    */
   private static validateAndFixToolCalls(messages: any[]): any[] {
     const validatedMessages: any[] = [];
+    const removedToolCallIds = new Set<string>(); // Track removed tool_call_ids
     
     for (let i = 0; i < messages.length; i++) {
       const msg = messages[i];
+      
+      // Skip tool messages that correspond to removed tool_calls
+      if (msg.role === 'tool' && msg.tool_call_id && removedToolCallIds.has(msg.tool_call_id)) {
+        console.warn(
+          `[APITranslator] Removing orphaned tool response at index ${i} for removed tool_call_id: ${msg.tool_call_id}`
+        );
+        continue;
+      }
       
       // If this is an assistant message with tool_calls
       if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
@@ -642,6 +651,9 @@ export class APITranslator {
             `[APITranslator] Removing incomplete tool_calls from assistant message at index ${i}. ` +
             `Tool call IDs: ${toolCallIds.join(', ')}`
           );
+          
+          // Mark these tool_call_ids as removed so we can skip corresponding tool responses
+          toolCallIds.forEach((id: string) => removedToolCallIds.add(id));
           
           // Check if the message has meaningful text content
           let hasTextContent = false;

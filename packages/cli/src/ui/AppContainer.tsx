@@ -196,6 +196,27 @@ export const AppContainer = (props: AppContainerProps) => {
 
   const [isConfigInitialized, setConfigInitialized] = useState(false);
 
+  // Plan+Todo mode states (must be before useSlashCommandProcessor)
+  const [planModeActive, setPlanModeActive] = useState(false);
+  const [currentPlan, setCurrentPlan] = useState<any>(null);
+  const [todos, setTodos] = useState<any[]>([]);
+
+  // Batch execution state for /todos execute-all
+  const [executionQueue, setExecutionQueue] = useState<{
+    active: boolean;
+    mode: 'default' | 'auto_edit';
+    currentIndex: number;
+    totalCount: number;
+    executingTodoId: string | null;
+  } | null>(null);
+
+  // Plan+Todo mode callbacks
+  const updateTodo = useCallback((id: string, updates: any) => {
+    setTodos(prev => prev.map(t => 
+      t.id === id ? { ...t, ...updates } : t
+    ));
+  }, []);
+
   const logger = useLogger(config.storage);
   const [userMessages, setUserMessages] = useState<string[]>([]);
 
@@ -509,6 +530,16 @@ Logging in with Google... Please restart Gemini CLI to continue.
     slashCommandActions,
     extensionsUpdateStateInternal,
     isConfigInitialized,
+    {
+      todos,
+      setTodos,
+      updateTodo,
+      currentPlan,
+      setCurrentPlan,
+      planModeActive,
+      executionQueue,
+      setExecutionQueue,
+    },
   );
 
   const performMemoryRefresh = useCallback(async () => {
@@ -605,6 +636,12 @@ Logging in with Google... Please restart Gemini CLI to continue.
     terminalWidth,
     terminalHeight,
     embeddedShellFocused,
+    planModeActive,
+    setCurrentPlan,
+    executionQueue,
+    todos,
+    updateTodo,
+    setExecutionQueue,
   );
 
   // Auto-accept indicator
@@ -938,6 +975,31 @@ Logging in with Google... Please restart Gemini CLI to continue.
         return;
       }
 
+      // Handle Ctrl+P for Plan mode
+      if (key.ctrl && key.name === 'p') {
+        // Toggle Plan mode
+        const newMode = !planModeActive;
+        setPlanModeActive(newMode);
+
+        historyManager.addItem(
+          {
+            type: 'info',
+            text: newMode
+              ? '📋 **Plan Mode Activated**\n\n' +
+                '✅ Read-only mode enabled\n' +
+                '✅ Only analysis and planning tools available\n' +
+                '✅ AI will use create_plan tool for structured output\n\n' +
+                '💡 Press Ctrl+P again to exit Plan mode'
+              : '📋 **Exited Plan Mode**\n\n' +
+                (currentPlan
+                  ? `📝 Plan "${currentPlan.title}" created\n💡 Use /plan to-todos to convert to executable todos`
+                  : 'No plan was created'),
+          },
+          Date.now(),
+        );
+        return;
+      }
+
       let enteringConstrainHeightMode = false;
       if (!constrainHeight) {
         enteringConstrainHeightMode = true;
@@ -992,6 +1054,9 @@ Logging in with Google... Please restart Gemini CLI to continue.
       activePtyId,
       embeddedShellFocused,
       settings.merged.general?.debugKeystrokeLogging,
+      planModeActive,
+      currentPlan,
+      historyManager,
     ],
   );
 
@@ -1157,6 +1222,7 @@ Logging in with Google... Please restart Gemini CLI to continue.
       activePtyId,
       embeddedShellFocused,
       showDebugProfiler,
+      planModeActive,
     }),
     [
       isThemeDialogOpen,
@@ -1238,6 +1304,7 @@ Logging in with Google... Please restart Gemini CLI to continue.
       historyManager,
       embeddedShellFocused,
       showDebugProfiler,
+      planModeActive,
     ],
   );
 

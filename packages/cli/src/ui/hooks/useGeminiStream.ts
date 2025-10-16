@@ -108,12 +108,155 @@ export const useGeminiStream = (
   terminalWidth: number,
   terminalHeight: number,
   isShellFocused?: boolean,
+  planModeActive?: boolean,
+  setCurrentPlan?: (plan: any) => void,
+  executionQueue?: {
+    active: boolean;
+    mode: 'default' | 'auto_edit';
+    currentIndex: number;
+    totalCount: number;
+    executingTodoId: string | null;
+  } | null,
+  todos?: any[],
+  updateTodo?: (id: string, updates: any) => void,
+  setExecutionQueue?: (queue: any) => void,
 ) => {
   const [initError, setInitError] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const turnCancelledRef = useRef(false);
   const [isResponding, setIsResponding] = useState<boolean>(false);
   const [thought, setThought] = useState<ThoughtSummary | null>(null);
+  
+  // Refs to store functions and state to avoid circular dependency and closure issues
+  const submitQueryRef = useRef<((query: string) => void) | null>(null);
+  const executionQueueRef = useRef(executionQueue);
+  const todosRef = useRef(todos);
+  const updateTodoRef = useRef(updateTodo);
+  const setExecutionQueueRef = useRef(setExecutionQueue);
+  
+  // Keep refs in sync with props
+  useEffect(() => {
+    executionQueueRef.current = executionQueue;
+  }, [executionQueue]);
+  
+  useEffect(() => {
+    todosRef.current = todos;
+  }, [todos]);
+  
+  useEffect(() => {
+    updateTodoRef.current = updateTodo;
+  }, [updateTodo]);
+  
+  useEffect(() => {
+    setExecutionQueueRef.current = setExecutionQueue;
+  }, [setExecutionQueue]);
+
+  // Sync Plan mode state to GeminiClient
+  useEffect(() => {
+    if (planModeActive !== undefined) {
+      geminiClient.setPlanModeActive(planModeActive);
+    }
+  }, [planModeActive, geminiClient]);
+
+  // Auto-continuation for batch todo execution
+  // Returns the prompt to execute next, or null if done
+  const handleNextTodo = useCallback(async (): Promise<string | null> => {
+    // Use refs to get the latest values
+    const currentQueue = executionQueueRef.current;
+    const currentTodos = todosRef.current;
+    const currentUpdateTodo = updateTodoRef.current;
+    const currentSetExecutionQueue = setExecutionQueueRef.current;
+    
+    console.log('[handleNextTodo] Starting', {
+      hasExecutionQueue: !!currentQueue,
+      isActive: currentQueue?.active,
+      hasTodos: !!currentTodos,
+      hasUpdateTodo: !!currentUpdateTodo,
+      hasSetExecutionQueue: !!currentSetExecutionQueue,
+      executingTodoId: currentQueue?.executingTodoId,
+    });
+    
+    if (!currentQueue || !currentQueue.active || !currentTodos || !currentUpdateTodo || !currentSetExecutionQueue) {
+      console.log('[handleNextTodo] Early return - missing required dependencies');
+      return null;
+    }
+
+    // Mark current todo as completed
+    if (currentQueue.executingTodoId) {
+      console.log('[handleNextTodo] Marking todo as completed:', currentQueue.executingTodoId);
+      currentUpdateTodo(currentQueue.executingTodoId, { 
+        status: 'completed',
+        completedAt: new Date(),
+      });
+    }
+
+    // Import utility function
+    const { getNextExecutableTodo } = await import('../../utils/todoUtils.js');
+    
+    // Find next executable todo
+    const nextTodo = getNextExecutableTodo(currentTodos);
+    console.log('[handleNextTodo] Next executable todo:', nextTodo ? nextTodo.id : 'null');
+    
+    if (!nextTodo) {
+      // No more todos to execute - batch complete
+      console.log('[handleNextTodo] Batch execution complete');
+      addItem(
+        {
+          type: 'info',
+          text: 
+            `✅ **Batch Execution Complete!**\n\n` +
+            `📊 Executed ${currentQueue.currentIndex}/${currentQueue.totalCount} todos\n\n` +
+            `Use /todos list to see final status`,
+        },
+        Date.now(),
+      );
+      
+      // Clear execution queue
+      currentSetExecutionQueue(null);
+      
+      // Restore original approval mode (if it was changed)
+      const { ApprovalMode } = await import('@google/gemini-cli-core');
+      config.setApprovalMode(ApprovalMode.DEFAULT);
+      
+      return null;
+    }
+
+    // Update execution queue with next todo
+    const newIndex = currentQueue.currentIndex + 1;
+    console.log('[handleNextTodo] Updating execution queue:', { newIndex, nextTodoId: nextTodo.id });
+    currentSetExecutionQueue({
+      ...currentQueue,
+      currentIndex: newIndex,
+      executingTodoId: nextTodo.id,
+    });
+
+    // Mark next todo as in_progress
+    console.log('[handleNextTodo] Marking next todo as in_progress:', nextTodo.id);
+    currentUpdateTodo(nextTodo.id, { status: 'in_progress' });
+
+    // Display progress
+    addItem(
+      {
+        type: 'info',
+        text: 
+          `▶️  **[${newIndex}/${currentQueue.totalCount}]** ${nextTodo.description}\n` +
+          (nextTodo.module ? `📦 Module: ${nextTodo.module}\n` : '') +
+          (nextTodo.estimatedTime ? `⏱️  Estimated: ${nextTodo.estimatedTime}\n` : ''),
+      },
+      Date.now(),
+    );
+
+    // Build execution prompt for next todo
+    let prompt = `[Batch Execution ${newIndex}/${currentQueue.totalCount}] ${nextTodo.description}\n\n`;
+    
+    if (nextTodo.risks && nextTodo.risks.length > 0) {
+      prompt += `⚠️ Risks to consider:\n${nextTodo.risks.map((r: string) => `- ${r}`).join('\n')}\n\n`;
+    }
+    
+    prompt += `Complete this task thoroughly and report when done.`;
+
+    return prompt;
+  }, [addItem, config]); // Only stable dependencies - use refs for dynamic values
   const [pendingHistoryItem, pendingHistoryItemRef, setPendingHistoryItem] =
     useStateAndRef<HistoryItemWithoutId | null>(null);
   const processedMemoryToolsRef = useRef<Set<string>>(new Set());
@@ -132,6 +275,27 @@ export const useGeminiStream = (
       async (completedToolCallsFromScheduler) => {
         // This onComplete is called when ALL scheduled tools for a given batch are done.
         if (completedToolCallsFromScheduler.length > 0) {
+          // Check for create_plan tool and save plan data
+          for (const toolCall of completedToolCallsFromScheduler) {
+            if (toolCall.request.name === 'create_plan' && setCurrentPlan) {
+              try {
+                const args = toolCall.request.args;
+                const planData = {
+                  title: args['title'],
+                  overview: args['overview'],
+                  steps: args['steps'] || [],
+                  risks: args['risks'],
+                  testingStrategy: args['testingStrategy'],
+                  estimatedDuration: args['estimatedDuration'],
+                  createdAt: new Date(),
+                };
+                setCurrentPlan(planData);
+              } catch (error) {
+                console.error('Error saving plan data:', error);
+              }
+            }
+          }
+
           // Add the final state of these tools to the history for display.
           addItem(
             mapTrackedToolCallsToDisplay(
@@ -511,7 +675,7 @@ export const useGeminiStream = (
   );
 
   const handleUserCancelledEvent = useCallback(
-    (userMessageTimestamp: number) => {
+    async (userMessageTimestamp: number) => {
       if (turnCancelledRef.current) {
         return;
       }
@@ -541,12 +705,38 @@ export const useGeminiStream = (
       );
       setIsResponding(false);
       setThought(null); // Reset thought when user cancels
+      
+      // Stop batch execution if active - use refs to get latest values
+      const currentQueue = executionQueueRef.current;
+      const currentSetExecutionQueue = setExecutionQueueRef.current;
+      
+      if (currentQueue && currentQueue.active && currentSetExecutionQueue) {
+        const { ApprovalMode } = await import('@google/gemini-cli-core');
+        
+        addItem(
+          {
+            type: MessageType.INFO,
+            text: 
+              `⏸️  **Batch Execution Interrupted**\n\n` +
+              `Completed: ${currentQueue.currentIndex - 1}/${currentQueue.totalCount} todos\n\n` +
+              `Use /todos list to see current progress\n` +
+              `Use /todos execute-all to resume remaining todos`,
+          },
+          Date.now(),
+        );
+        
+        // Clear execution queue
+        currentSetExecutionQueue(null);
+        
+        // Restore original approval mode
+        config.setApprovalMode(ApprovalMode.DEFAULT);
+      }
     },
-    [addItem, pendingHistoryItemRef, setPendingHistoryItem, setThought],
+    [addItem, pendingHistoryItemRef, setPendingHistoryItem, setThought, config],
   );
 
   const handleErrorEvent = useCallback(
-    (eventValue: GeminiErrorEventValue, userMessageTimestamp: number) => {
+    async (eventValue: GeminiErrorEventValue, userMessageTimestamp: number) => {
       if (pendingHistoryItemRef.current) {
         addItem(pendingHistoryItemRef.current, userMessageTimestamp);
         setPendingHistoryItem(null);
@@ -565,6 +755,40 @@ export const useGeminiStream = (
         userMessageTimestamp,
       );
       setThought(null); // Reset thought when there's an error
+      
+      // Stop batch execution on error - use refs to get latest values
+      const currentQueue = executionQueueRef.current;
+      const currentSetExecutionQueue = setExecutionQueueRef.current;
+      const currentUpdateTodo = updateTodoRef.current;
+      
+      if (currentQueue && currentQueue.active && currentSetExecutionQueue && currentUpdateTodo) {
+        const { ApprovalMode } = await import('@google/gemini-cli-core');
+        
+        // Mark current todo as cancelled (failed)
+        if (currentQueue.executingTodoId) {
+          currentUpdateTodo(currentQueue.executingTodoId, { 
+            status: 'cancelled',
+          });
+        }
+        
+        addItem(
+          {
+            type: MessageType.ERROR,
+            text: 
+              `❌ **Batch Execution Failed**\n\n` +
+              `Todo ${currentQueue.currentIndex}/${currentQueue.totalCount} encountered an error.\n\n` +
+              `Progress: ${currentQueue.currentIndex - 1} completed, 1 failed\n\n` +
+              `💡 Fix the issue and run /todos execute-all to continue with remaining todos`,
+          },
+          Date.now(),
+        );
+        
+        // Clear execution queue
+        currentSetExecutionQueue(null);
+        
+        // Restore original approval mode
+        config.setApprovalMode(ApprovalMode.DEFAULT);
+      }
     },
     [addItem, pendingHistoryItemRef, setPendingHistoryItem, config, setThought],
   );
@@ -918,6 +1142,61 @@ export const useGeminiStream = (
           }
         } finally {
           setIsResponding(false);
+          
+          // Check if we should continue batch execution using refs to get latest values
+          const currentQueue = executionQueueRef.current;
+          const currentSetExecutionQueue = setExecutionQueueRef.current;
+          
+          console.log('[Batch Execution] Finally block reached', {
+            hasExecutionQueue: !!currentQueue,
+            isActive: currentQueue?.active,
+            hasSubmitQueryRef: !!submitQueryRef.current,
+            executingTodoId: currentQueue?.executingTodoId,
+          });
+          
+          if (currentQueue && currentQueue.active) {
+            if (!submitQueryRef.current) {
+              console.warn('[Batch Execution] submitQueryRef.current is null, will retry...');
+              // Retry after a short delay in case ref is not yet set
+              setTimeout(() => {
+                const retryQueue = executionQueueRef.current;
+                if (submitQueryRef.current && retryQueue && retryQueue.active) {
+                  handleNextTodo().then(nextPrompt => {
+                    if (nextPrompt && submitQueryRef.current) {
+                      console.log('[Batch Execution] Submitting next todo prompt');
+                      setTimeout(() => {
+                        submitQueryRef.current?.(nextPrompt);
+                      }, 500);
+                    }
+                  }).catch((error: Error) => {
+                    console.error('[Batch Execution] Error in handleNextTodo:', error);
+                    if (currentSetExecutionQueue) {
+                      currentSetExecutionQueue(null);
+                    }
+                  });
+                }
+              }, 1000);
+            } else {
+              // Handle next todo asynchronously
+              console.log('[Batch Execution] Calling handleNextTodo');
+              handleNextTodo().then(nextPrompt => {
+                console.log('[Batch Execution] handleNextTodo returned:', nextPrompt ? 'prompt' : 'null');
+                if (nextPrompt && submitQueryRef.current) {
+                  console.log('[Batch Execution] Submitting next todo');
+                  // Submit the next todo's prompt
+                  setTimeout(() => {
+                    submitQueryRef.current?.(nextPrompt);
+                  }, 500); // Small delay to ensure UI updates
+                }
+              }).catch((error: Error) => {
+                console.error('[Batch Execution] Error in handleNextTodo:', error);
+                // Clear execution queue on error
+                if (currentSetExecutionQueue) {
+                  currentSetExecutionQueue(null);
+                }
+              });
+            }
+          }
         }
       });
     },
@@ -936,6 +1215,8 @@ export const useGeminiStream = (
       startNewPrompt,
       getPromptCount,
       handleLoopDetectedEvent,
+      handleNextTodo,
+      // Note: executionQueue, todos, updateTodo, setExecutionQueue accessed via refs
     ],
   );
 
@@ -1226,6 +1507,11 @@ export const useGeminiStream = (
     geminiClient,
     storage,
   ]);
+
+  // Update submitQueryRef for batch execution
+  useEffect(() => {
+    submitQueryRef.current = submitQuery;
+  }, [submitQuery]);
 
   return {
     streamingState,

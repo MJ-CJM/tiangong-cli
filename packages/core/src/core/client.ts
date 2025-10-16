@@ -25,7 +25,7 @@ import type {
 import { CompressionStatus } from './turn.js';
 import { Turn, GeminiEventType } from './turn.js';
 import type { Config } from '../config/config.js';
-import { getCoreSystemPrompt, getCompressionPrompt } from './prompts.js';
+import { getCoreSystemPrompt, getCompressionPrompt, getPlanModeSystemPrompt } from './prompts.js';
 import { getResponseText } from '../utils/partUtils.js';
 import { checkNextSpeaker } from '../utils/nextSpeakerChecker.js';
 import { reportError } from '../utils/errorReporting.js';
@@ -144,6 +144,11 @@ export class GeminiClient {
    */
   private hasFailedCompressionAttempt = false;
 
+  /**
+   * Plan mode active - when true, only read-only tools + create_plan are available
+   */
+  private planModeActive = false;
+
   constructor(private readonly config: Config) {
     this.loopDetector = new LoopDetectionService(config);
     this.lastPromptId = this.config.getSessionId();
@@ -205,6 +210,21 @@ export class GeminiClient {
 
   getLoopDetectionService(): LoopDetectionService {
     return this.loopDetector;
+  }
+
+  /**
+   * Set Plan mode state
+   * When Plan mode is active, only read-only tools + create_plan are available
+   */
+  setPlanModeActive(active: boolean): void {
+    this.planModeActive = active;
+  }
+
+  /**
+   * Get Plan mode state
+   */
+  getPlanModeActive(): boolean {
+    return this.planModeActive;
   }
 
   async addDirectoryContext(): Promise<void> {
@@ -998,7 +1018,12 @@ export class GeminiClient {
 
       // Get system instruction for all model types
       const userMemory = this.config.getUserMemory();
-      const systemInstruction = getCoreSystemPrompt(userMemory, actualModelName);
+      let systemInstruction = getCoreSystemPrompt(userMemory, actualModelName);
+
+      // In Plan mode, append Plan-specific system prompt
+      if (this.planModeActive) {
+        systemInstruction += '\n\n' + getPlanModeSystemPrompt();
+      }
 
       const unifiedRequest: UnifiedRequest = {
         messages: [...historyMessages, userMessage],
@@ -1150,11 +1175,30 @@ export class GeminiClient {
         ? toolRegistry.getFunctionDeclarations()
         : [];
 
+    // Define read-only tools allowed in Plan mode
+    const readOnlyTools = [
+      'read_file',
+      'read_many_files',
+      'ls',
+      'glob',
+      'grep',
+      'rg',
+      'web_fetch',
+      'web_search',
+      'create_plan', // Special: Plan creation tool
+    ];
+
     const tools: ToolDefinition[] = [];
     for (const declaration of declarations as FunctionDeclaration[]) {
       if (!declaration?.name) {
         continue;
       }
+
+      // In Plan mode, only include read-only tools
+      if (this.planModeActive && !readOnlyTools.includes(declaration.name)) {
+        continue;
+      }
+
       tools.push({
         name: declaration.name,
         description: declaration.description ?? '',

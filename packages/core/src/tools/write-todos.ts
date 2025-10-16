@@ -80,10 +80,29 @@ The agent did not use the todo list because this task could be completed by a ti
 `;
 
 export type TodoStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
+export type TodoPriority = 'high' | 'medium' | 'low';
 
 export interface Todo {
   description: string;
   status: TodoStatus;
+}
+
+/**
+ * Extended Todo interface for Plan+Todo mode
+ * Includes additional metadata for better task management
+ */
+export interface ExtendedTodo {
+  id: string;
+  description: string;
+  status: TodoStatus;
+  priority: TodoPriority;
+  module?: string;
+  dependencies?: string[];
+  risks?: string[];
+  estimatedTime?: string;
+  createdFrom?: 'plan' | 'manual';
+  createdAt?: Date;
+  completedAt?: Date;
 }
 
 export interface WriteTodosToolParams {

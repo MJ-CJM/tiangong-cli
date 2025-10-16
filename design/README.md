@@ -52,7 +52,14 @@
   - [README.md](./workflows/README.md) - Workflow 系统概述
   - [design.md](./workflows/design.md) - Workflow 架构设计
 
-### 4️⃣ 模式切换系统（计划中）
+### 4️⃣ Plan+Todo 模式
+- **[plan-todo/](./plan-todo/)** - Plan+Todo 模式
+  - [README.md](./plan-todo/README.md) - Plan+Todo 系统概述
+  - [DESIGN_AND_IMPLEMENTATION.md](./plan-todo/DESIGN_AND_IMPLEMENTATION.md) - 设计与实现
+  - [API.md](./plan-todo/API.md) - 命令和工具 API
+  - [USER_GUIDE.md](./plan-todo/USER_GUIDE.md) - 用户指南
+
+### 5️⃣ 模式切换系统（计划中）
 - **[modes/](./modes/)** - 模式切换
   - _功能规划中，文档待创建_
 
@@ -66,6 +73,7 @@
 - [Agents 快速开始](./agents/QUICK_START.md)
 - [添加新模型指南](./models/add-new-model-guide.md)
 - [Workflow 系统概述](./workflows/README.md)
+- [Plan+Todo 用户指南](./plan-todo/USER_GUIDE.md)
 
 #### 👨‍💻 开发者文档
 - [系统架构](./architecture.md)
@@ -73,12 +81,14 @@
 - [Agents 实现细节](./agents/IMPLEMENTATION.md)
 - [模型支持设计](./models/universal-model-support.md)
 - [Workflow 设计](./workflows/design.md)
+- [Plan+Todo 设计与实现](./plan-todo/DESIGN_AND_IMPLEMENTATION.md)
 
 #### 🔧 功能参考
 - [Agents 命令参考](./agents/COMMANDS.md)
 - [路由功能](./agents/routing/README.md)
 - [移交功能](./agents/handoff/README.md)
 - [上下文管理](./agents/context/README.md)
+- [Plan+Todo API 参考](./plan-todo/API.md)
 
 ### 按功能导航
 
@@ -106,6 +116,13 @@
 - **用户指南**: [workflows/user-guide.md](./workflows/user-guide.md)
 - **状态**: ✅ 已完成（含并行执行）
 
+#### 📋 Plan+Todo 模式
+- **概述**: [plan-todo/README.md](./plan-todo/README.md)
+- **设计与实现**: [plan-todo/DESIGN_AND_IMPLEMENTATION.md](./plan-todo/DESIGN_AND_IMPLEMENTATION.md)
+- **API 参考**: [plan-todo/API.md](./plan-todo/API.md)
+- **用户指南**: [plan-todo/USER_GUIDE.md](./plan-todo/USER_GUIDE.md)
+- **状态**: ✅ 已完成（含批量执行）
+
 #### 🎯 模式切换（计划中）
 - **概述**: 📋 规划中
 - **状态**: 📋 设计阶段
@@ -124,6 +141,8 @@
 | **交互式创建** | 100% | ✅ 已完成 | 100% |
 | **Workflow 顺序** | 100% | ✅ 已完成 | 100% |
 | **Workflow 并行** | 100% | ✅ 已完成 | 100% |
+| **Plan+Todo 模式** | 100% | ✅ 已完成 | 100% |
+| **批量执行** | 100% | ✅ 已完成 | 100% |
 | **模式切换** | 0% | 📋 计划中 | 0% |
 
 ---
@@ -152,6 +171,7 @@
 ### 📚 用户文档
 - [完整用户指南](../docs/AGENTS.md)
 - [Workflow 使用指南](../docs/WORKFLOWS.md)
+- [Plan+Todo 模式用户手册](../docs/PLAN_TODO_MODE_USER_GUIDE.md)
 - [添加新模型](../docs/ADD_NEW_MODEL.md)
 
 ### 💻 代码实现
@@ -173,6 +193,7 @@
 
 ### 更新记录
 
+- **2025-10-16**: Plan+Todo 模式完成，文档整理
 - **2025-10-14**: 重组文档结构，按功能分层管理
 - **2025-10-13**: Workflow 并行功能完成，文档更新
 - **2025-10-07**: Agents P2 功能完成

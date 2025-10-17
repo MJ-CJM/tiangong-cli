@@ -24,8 +24,9 @@ Plan+Todo 模式是一个两阶段的任务执行流程：
 
 ## 📚 文档导航
 
-### 快速开始
-- [USER_GUIDE.md](./USER_GUIDE.md) - 完整用户手册，包含快速开始和最佳实践
+### 用户文档
+- [USER_GUIDE.md](./USER_GUIDE.md) - 快速开始和最佳实践
+- [COMPLETE_USER_MANUAL.md](./COMPLETE_USER_MANUAL.md) - 完整详细的用户手册
 
 ### 技术文档
 - [DESIGN_AND_IMPLEMENTATION.md](./DESIGN_AND_IMPLEMENTATION.md) - 架构设计和实现细节
@@ -92,7 +93,8 @@ Plan+Todo 模式是一个两阶段的任务执行流程：
 ## 🔗 相关资源
 
 ### 用户文档
-- [完整用户手册](../../docs/PLAN_TODO_MODE_USER_GUIDE.md)
+- [完整用户手册](./COMPLETE_USER_MANUAL.md) - 详细的使用指南（2300+ 行）
+- [快速指南](./USER_GUIDE.md) - 精简的上手指南（560+ 行）
 
 ### 代码实现
 - Core: `packages/core/src/tools/create-plan.ts`

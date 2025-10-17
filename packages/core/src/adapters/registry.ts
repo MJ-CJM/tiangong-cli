@@ -68,24 +68,25 @@ export class AdapterRegistry {
 
   /**
    * Infer adapter type from provider name
+   * Note: With the new unified design, all OpenAI-compatible services use provider='openai'
    */
   private static inferAdapterType(provider: ModelProvider | string): string {
     // Map of providers to their adapter types
     const providerAdapterMap: Record<string, string> = {
       [ModelProvider.GEMINI]: 'gemini',
-      [ModelProvider.OPENAI]: 'openai',
+      [ModelProvider.OPENAI]: 'openai',    // All OpenAI-compatible use this
       [ModelProvider.CLAUDE]: 'claude',
-      [ModelProvider.QWEN]: 'openai',      // Qwen is OpenAI-compatible
+      [ModelProvider.QWEN]: 'openai',      // Legacy: Qwen now uses provider='openai' + metadata
       [ModelProvider.CUSTOM]: 'custom',
 
-      // Additional OpenAI-compatible providers
+      // Legacy support for old provider names (backward compatibility)
       'deepseek': 'openai',
       'moonshot': 'openai',
       'zhipu': 'openai',
       'minimax': 'openai',
       'openai-compatible': 'openai',
 
-      // Additional Claude-compatible providers
+      // Claude-compatible
       'claude-compatible': 'claude',
     };
 
@@ -94,28 +95,13 @@ export class AdapterRegistry {
 
   /**
    * Normalize config for adapter compatibility
+   * Note: With the new design, we keep the original provider intact
+   * so adapters can use it for logging and API key lookup
    */
   private static normalizeConfig(config: ModelConfig, adapterType: string): ModelConfig {
-    const normalized = { ...config };
-
-    // If using OpenAI adapter but provider isn't 'openai', adjust the config
-    if (adapterType === 'openai' && config.provider !== ModelProvider.OPENAI) {
-      // Keep original provider for logging/tracking
-      // But ensure the adapter sees it as compatible
-      normalized.provider = ModelProvider.OPENAI;
-    }
-
-    // If using Claude adapter but provider isn't 'claude', adjust the config
-    if (adapterType === 'claude' && config.provider !== ModelProvider.CLAUDE) {
-      normalized.provider = ModelProvider.CLAUDE;
-    }
-
-    // If using custom adapter but provider isn't 'custom', adjust the config
-    if (adapterType === 'custom' && config.provider !== ModelProvider.CUSTOM) {
-      normalized.provider = ModelProvider.CUSTOM;
-    }
-
-    return normalized;
+    // Simply return the config as-is
+    // The OpenAIAdapter now accepts multiple providers natively
+    return { ...config };
   }
 
   /**

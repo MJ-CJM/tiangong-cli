@@ -33,6 +33,7 @@
 | 🎭 **Agents 智能体系统** | 创建专业化 AI 助手，独立上下文和工具权限 | ✅ 已完成 |
 | 🧭 **智能路由与移交** | 自动选择最佳 Agent，支持 Agent 间协作 | ✅ 已完成 |
 | 🔄 **Workflow 工作流** | 多 Agent 编排，支持顺序和并行执行 | ✅ 已完成 |
+| 📋 **Plan+Todo 模式** | 先规划后执行，结构化任务分解和管理 | ✅ 已完成 |
 | 🎯 **模式切换系统** | Plan、Spec、Code 等专业模式切换 | 📋 计划中 |
 
 ### ⚡ 继承的强大功能
@@ -110,13 +111,17 @@ npm start
   "defaultModel": "qwen-coder-plus",
   "models": {
     "qwen-coder-plus": {
-      "provider": "qwen",
-      "adapterType": "openai",
+      "provider": "openai",
       "model": "qwen-coder-plus",
       "apiKey": "sk-your-api-key",
       "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "metadata": {
+        "providerName": "qwen",
+        "displayName": "通义千问"
+      },
       "capabilities": {
-        "maxOutputTokens": 8192
+        "maxOutputTokens": 8192,
+        "supportsFunctionCalling": true
       }
     }
   }
@@ -129,13 +134,17 @@ npm start
 {
   "models": {
     "deepseek-coder": {
-      "provider": "deepseek",
-      "adapterType": "openai",
+      "provider": "openai",
       "model": "deepseek-coder",
       "apiKey": "sk-your-api-key",
       "baseUrl": "https://api.deepseek.com",
+      "metadata": {
+        "providerName": "deepseek",
+        "displayName": "DeepSeek"
+      },
       "capabilities": {
         "maxOutputTokens": 4096,
+        "supportsFunctionCalling": false,
         "supportsMultimodal": false
       }
     }
@@ -153,7 +162,7 @@ npm start
 gemini --model deepseek-coder
 ```
 
-<!-- 📚 **详细文档**：[如何添加新模型](./docs/ADD_NEW_MODEL.md) -->
+📚 **详细文档**：[添加新模型指南](./design/models/add-new-model-guide.md) | [模型系统设计](./design/models/universal-model-support.md) | [模型系统概述](./design/models/README.md)
 
 ---
 
@@ -294,11 +303,7 @@ handoffs:
 /agents info code-review
 ```
 
-<!-- 
-📚 **详细文档**：
-- [Agents 用户指南](./docs/AGENTS.md)
-- [Agents 快速开始](./AGENTS_QUICK_START.md)
--->
+📚 **详细文档**：[Agents 快速开始](./design/agents/QUICK_START.md) | [Agents 系统设计](./design/agents/DESIGN.md) | [实现细节](./design/agents/IMPLEMENTATION.md) | [命令参考](./design/agents/COMMANDS.md)
 
 ---
 
@@ -408,7 +413,7 @@ code_review agent 专注于代码审查，当检测到用户实际想要**实现
 - ✅ 深度限制：最大移交深度 5 层
 - ✅ 追踪机制：每个移交链有唯一 correlation_id
 
-<!-- 📚 **详细文档**：[智能路由与移交功能](./AGENTS_P2_FEATURES.md) -->
+📚 **详细文档**：[智能路由系统](./design/agents/routing/README.md) | [Agent 移交系统](./design/agents/handoff/README.md) | [P2 功能总结](./design/agents/completion-summaries/p2-completion.md)
 
 ---
 
@@ -570,11 +575,113 @@ ${parallelGroupId.data.total_count}
 
 **当前状态**：✅ 已完成，包括 WorkflowManager、WorkflowExecutor、CLI 集成、并行执行、完整文档
 
-📚 **详细文档**：[Workflow 完整指南](./docs/WORKFLOWS.md) | [系统设计](./design/agents/WORKFLOW_DESIGN.md)
+📚 **详细文档**：[Workflow 用户指南](./design/workflows/USER_GUIDE.md) | [系统设计](./design/workflows/design.md) | [Workflow 概述](./design/workflows/README.md)
 
 ---
 
-### 5️⃣ 模式切换系统 📋
+### 5️⃣ Plan+Todo 模式 ✅
+
+**先规划后执行**的两阶段工作流，让复杂任务井然有序。
+
+#### 核心特性
+
+- 🔒 **安全的 Plan 模式**：只读模式，只分析不修改代码
+- 📋 **结构化计划**：包含步骤、风险评估、测试策略
+- ✅ **智能依赖检查**：自动验证任务依赖关系
+- ⚙️ **灵活执行模式**：支持自动（auto_edit）和手动（default）审批
+- 🚀 **批量执行**：`/todos execute-all` 一键执行所有待办
+- 📊 **进度追踪**：清晰的任务状态显示
+
+#### 工作流程
+
+**1. Plan 阶段（规划）**
+
+```bash
+# 按 Ctrl+P 进入 Plan 模式
+> [Ctrl+P]
+[PLAN] >
+
+# AI 分析需求并创建计划
+[PLAN] > 帮我规划实现用户登录功能
+
+✅ Plan Created: "Implement User Login"
+
+Steps (5):
+1. step-1: Create User model ⏱️ 30min
+2. step-2: Implement JWT [deps: step-1] ⏱️ 45min
+3. step-3: Create API endpoints [deps: step-2] ⏱️ 30min
+4. step-4: Add frontend login form [deps: step-3] ⏱️ 1h
+5. step-5: Write tests [deps: step-1, step-2, step-3] ⏱️ 1h
+
+Risks: Password hashing, Token security
+Testing: Unit tests + Integration tests
+
+# 退出 Plan 模式
+> [Ctrl+P]
+```
+
+**2. Todo 阶段（执行）**
+
+```bash
+# 将计划转换为待办任务
+> /plan to-todos
+✅ Created 5 todos
+
+# 查看任务列表
+> /todos list
+
+📋 Todo List (5 total)
+⬜ 5 pending
+
+### HIGH Priority
+⬜ step-1 - Create User model ⏱️ 30min
+⬜ step-2 - Implement JWT [deps: step-1] ⏱️ 45min
+  ⚠️  Token security vulnerabilities
+
+# 执行单个任务（自动模式）
+> /todos execute step-1 --mode=auto_edit
+✓ write_file models/User.ts
+✅ Task completed
+
+# 或批量执行所有任务
+> /todos execute-all --mode=auto_edit
+
+🚀 Starting Batch Execution
+📊 Total todos: 5
+
+▶️  [1/5] Create User model...
+✓ write_file models/User.ts
+
+▶️  [2/5] Implement JWT...
+✓ write_file auth/jwt.ts
+
+[...]
+
+✅ Batch Execution Complete!
+📊 Executed 5/5 todos in 3 minutes
+```
+
+#### 执行模式
+
+| 模式 | 说明 | 适用场景 |
+|------|------|----------|
+| `default` | 每个操作需要确认 | 核心业务逻辑、数据库操作 |
+| `auto_edit` | 自动批准所有操作 | UI 组件、测试代码、文档 |
+
+#### 典型使用场景
+
+- 🏗️ **功能开发**：先规划架构和步骤，再逐步实现
+- 🔄 **代码重构**：分析风险，制定安全的重构步骤
+- 📚 **学习代码库**：使用 Plan 模式分析代码结构
+- 💾 **数据库迁移**：详细规划迁移步骤和回滚方案
+
+**当前状态**：✅ 已完成，包括 Plan 模式、Todo 管理、批量执行、完整文档
+
+📚 **详细文档**：[完整用户手册](./design/plan-todo/COMPLETE_USER_MANUAL.md) | [快速指南](./design/plan-todo/USER_GUIDE.md) | [设计与实现](./design/plan-todo/DESIGN_AND_IMPLEMENTATION.md)
+
+---
+
+### 6️⃣ 模式切换系统 📋
 
 专业化的工作模式，针对不同开发阶段提供定制化体验。
 
@@ -590,36 +697,6 @@ ${parallelGroupId.data.total_count}
 | **Debug 模式** | 问题诊断 | 错误分析、性能调优、问题定位 |
 
 #### 模式切换示例（计划）
-
-```bash
-# 切换到 Plan 模式
-/mode plan
-
-# 在 Plan 模式下工作
-> 我要开发一个用户认证系统
-[Plan Mode] 分析需求...
-- 功能需求：登录、注册、密码重置
-- 技术栈：JWT、bcrypt
-- 时间估算：3-5 天
-
-# 切换到 Spec 模式
-/mode spec
-
-# 在 Spec 模式下设计
-> 设计登录 API
-[Spec Mode] API 规格：
-POST /api/auth/login
-Request: { email, password }
-Response: { token, user }
-...
-
-# 切换回 Code 模式
-/mode code
-```
-
-**当前状态**：设计阶段，预计在 Agents 系统稳定后开发
-
-<!-- 📚 **详细文档**：功能规划中 -->
 
 ---
 
@@ -707,6 +784,24 @@ Response: { token, user }
 /workflow delete <workflow-name>
 ```
 
+### Plan+Todo 管理
+
+```bash
+# Plan 模式操作
+[Ctrl+P]              # 切换 Plan 模式
+/plan show            # 显示当前计划
+/plan to-todos        # 转换为 todos
+/plan clear           # 清除计划
+
+# Todo 管理
+/todos list           # 列出所有 todos
+/todos execute <id> [--mode=auto_edit|default]  # 执行单个 todo
+/todos execute-all [--mode=auto_edit|default]   # 批量执行所有 todos
+/todos update <id> <status>  # 更新 todo 状态
+/todos export         # 导出为 JSON
+/todos clear          # 清除所有 todos
+```
+
 ### 通用命令
 
 ```bash
@@ -728,41 +823,30 @@ Response: { token, user }
 
 ---
 
-<!-- 
 ## 📚 文档导航
-
-文档正在整理中，敬请期待...
 
 ### 用户指南
 
-- 🚀 [快速开始](./AGENTS_QUICK_START.md) - 5 分钟上手指南
-- 📖 [Agents 用户指南](./docs/AGENTS.md) - Agents 系统完整说明
-- 🤖 [如何添加新模型](./docs/ADD_NEW_MODEL.md) - 自定义模型配置指南
-- 🧭 [智能路由功能](./AGENTS_P2_FEATURES.md) - 路由和移交详解
-- 🔄 [Workflow 工作流](./design/agents/WORKFLOW_DESIGN.md) - 工作流系统设计
-
-### 功能文档
-
-- ⚙️ [配置指南](./docs/cli/configuration.md) - 完整配置选项
-- 🔧 [命令参考](./docs/cli/commands.md) - 所有命令说明
-- 🛠️ [工具 API](./docs/tools/index.md) - 内置工具文档
-- 🔌 [MCP 集成](./docs/tools/mcp-server.md) - MCP 服务器配置
-
-### 开发文档
-
-- 🏗️ [架构设计](./docs/architecture.md) - 系统架构概览
-- 🎨 [通用模型支持](./design/DESIGN_UNIVERSAL_MODEL_SUPPORT.md) - 模型架构设计
-- 🤝 [贡献指南](./CONTRIBUTING.md) - 如何参与开发
-- 📝 [开发环境搭建](./study/06-dev-setup.md) - 开发环境配置
+- 🎭 [Agents 用户指南](./design/agents/USER_GUIDE.md) - Agents 系统完整使用手册
+- 🚀 [Agents 快速开始](./design/agents/QUICK_START.md) - 5 分钟上手指南
+- 🔄 [Workflow 用户指南](./design/workflows/USER_GUIDE.md) - Workflow 完整使用指南
+- 📋 [Plan+Todo 用户手册](./design/plan-todo/COMPLETE_USER_MANUAL.md) - Plan+Todo 完整手册
+- 🤖 [如何添加新模型](./design/models/add-new-model-guide.md) - 自定义模型配置指南
 
 ### 设计文档
 
-- 📐 [Agents 系统设计](./design/agents/DESIGN.md) - Agents 架构设计
-- 🚦 [路由系统设计](./design/agents/P2_ROUTING_HANDOFF_DESIGN.md) - 智能路由设计
-- 🔄 [Workflow 系统设计](./design/agents/WORKFLOW_DESIGN.md) - 工作流架构
-- 📊 [Workflow 实现进度](./WORKFLOW_PROGRESS.md) - 开发进度追踪
-- 🗺️ [功能路线图](./design/agents/ROADMAP.md) - 未来规划
--->
+- 📐 [整体架构设计](./design/README.md) - 所有功能的设计文档索引
+- 🎭 [Agents 系统设计](./design/agents/DESIGN.md) - Agents 架构设计
+- 🧭 [智能路由系统](./design/agents/routing/README.md) - 路由功能设计
+- 🔄 [Workflow 系统设计](./design/workflows/design.md) - 工作流架构
+- 📋 [Plan+Todo 设计](./design/plan-todo/DESIGN_AND_IMPLEMENTATION.md) - Plan+Todo 架构设计
+- 🤖 [模型系统设计](./design/models/universal-model-support.md) - 通用模型支持架构
+
+### 开发文档
+
+- 🏗️ [架构概览](./docs/architecture.md) - 系统架构概览
+- 🤝 [贡献指南](./CONTRIBUTING.md) - 如何参与开发
+- 📝 [开发环境搭建](./study/06-dev-setup.md) - 开发环境配置
 
 ---
 
@@ -776,31 +860,43 @@ Response: { token, user }
   "defaultModel": "qwen-coder-plus",
   "models": {
     "qwen-coder-plus": {
-      "provider": "qwen",
-      "adapterType": "openai",
+      "provider": "openai",
       "model": "qwen-coder-plus",
       "apiKey": "sk-qwen-key",
       "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "metadata": {
+        "providerName": "qwen",
+        "displayName": "通义千问"
+      },
       "capabilities": {
-        "maxOutputTokens": 8192
+        "maxOutputTokens": 8192,
+        "supportsFunctionCalling": true
       }
     },
     "deepseek-coder": {
-      "provider": "deepseek",
-      "adapterType": "openai",
+      "provider": "openai",
       "model": "deepseek-coder",
       "apiKey": "sk-deepseek-key",
       "baseUrl": "https://api.deepseek.com",
+      "metadata": {
+        "providerName": "deepseek",
+        "displayName": "DeepSeek"
+      },
       "capabilities": {
         "maxOutputTokens": 4096,
+        "supportsFunctionCalling": false,
         "supportsMultimodal": false
       }
     },
-    "local-llama": {
-      "provider": "custom",
-      "adapterType": "openai",
-      "model": "llama3-70b",
+    "local-qwen": {
+      "provider": "openai",
+      "model": "Qwen2.5-Coder-32B-Instruct",
+      "apiKey": "not-required",
       "baseUrl": "http://localhost:11434/v1",
+      "metadata": {
+        "providerName": "qwen",
+        "displayName": "本地千问"
+      },
       "capabilities": {
         "maxOutputTokens": 4096,
         "supportsFunctionCalling": false
@@ -958,6 +1054,7 @@ export GEMINI_ROUTING_CONFIDENCE_THRESHOLD=75
 | Agent 移交 | ❌ 无 | ✅ Agent 间智能协作 |
 | Workflow 顺序执行 | ❌ 无 | ✅ 多 Agent 顺序编排 |
 | Workflow 并行执行 | ❌ 无 | ✅ 多 Agent 并行执行，显著提速 |
+| Plan+Todo 模式 | ❌ 无 | ✅ 先规划后执行，批量执行支持 |
 | 模式切换 | ❌ 无 | 📋 专业模式系统（计划中） |
 | 中文文档 | ❌ 英文为主 | ✅ 完整中文文档 |
 

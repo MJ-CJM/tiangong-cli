@@ -2,28 +2,34 @@
 
 本文档介绍如何通过配置文件快速添加新的 AI 模型，无需修改代码。
 
-> **✅ 已验证**: 本指南基于生产环境实践，DeepSeek、Qwen 等模型已成功接入。
+> **✅ 已验证**: 本指南基于统一 Provider 方案，DeepSeek、Qwen、本地模型等均已成功接入。
 
 ## 快速开始
 
 ### 1. 添加 OpenAI 兼容模型（推荐）
 
-大多数现代 AI 模型都提供 OpenAI 兼容的 API。对于这些模型，只需要在 `~/.gemini/config.json` 中添加配置即可。
+大多数现代 AI 模型都提供 OpenAI 兼容的 API。**统一使用 `provider: "openai"`**，通过 `metadata` 配置身份和环境变量。
 
 #### 示例：添加通义千问 (Qwen)
+
+在 `~/.gemini/config.json` 中添加：
 
 ```json
 {
   "useModelRouter": true,
   "models": {
     "qwen-coder-plus": {
-      "provider": "qwen",
-      "adapterType": "openai",
+      "provider": "openai",
       "model": "qwen-coder-plus",
       "apiKey": "sk-your-api-key",
       "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "metadata": {
+        "providerName": "qwen",
+        "displayName": "通义千问"
+      },
       "capabilities": {
-        "maxOutputTokens": 8192
+        "maxOutputTokens": 8192,
+        "supportsFunctionCalling": true
       }
     }
   }
@@ -36,13 +42,17 @@
 {
   "models": {
     "deepseek-coder": {
-      "provider": "deepseek",
-      "adapterType": "openai",
+      "provider": "openai",
       "model": "deepseek-coder",
       "apiKey": "sk-your-api-key",
       "baseUrl": "https://api.deepseek.com",
+      "metadata": {
+        "providerName": "deepseek",
+        "displayName": "DeepSeek"
+      },
       "capabilities": {
         "maxOutputTokens": 4096,
+        "supportsFunctionCalling": false,
         "supportsMultimodal": false
       }
     }
@@ -50,21 +60,25 @@
 }
 ```
 
+**重要**：DeepSeek 必须设置 `supportsFunctionCalling: false` 和 `supportsMultimodal: false`
+
 #### 示例：添加其他 OpenAI 兼容模型
 
 ```json
 {
   "models": {
     "custom-model": {
-      "provider": "openai-compatible",
-      "adapterType": "openai",
+      "provider": "openai",
       "model": "your-model-name",
       "apiKey": "your-api-key",
       "baseUrl": "https://api.your-provider.com/v1",
+      "metadata": {
+        "providerName": "custom",
+        "displayName": "我的模型",
+        "envKeyNames": ["MY_API_KEY", "CUSTOM_KEY"]
+      },
       "capabilities": {
-        "maxInputTokens": 32768,
         "maxOutputTokens": 8192,
-        "supportsStreaming": true,
         "supportsFunctionCalling": true
       }
     }
@@ -74,16 +88,20 @@
 
 ### 2. 添加本地部署模型
 
-对于本地部署的模型（如 Ollama、LM Studio 等），通常也是 OpenAI 兼容的：
+对于本地部署的模型（如 Ollama、LM Studio 等），同样使用 `provider: "openai"`：
 
 ```json
 {
   "models": {
-    "local-llama": {
-      "provider": "custom",
-      "adapterType": "openai",
-      "model": "llama3-70b",
+    "local-qwen": {
+      "provider": "openai",
+      "model": "Qwen2.5-Coder-32B-Instruct",
+      "apiKey": "not-required",
       "baseUrl": "http://localhost:11434/v1",
+      "metadata": {
+        "providerName": "qwen",
+        "displayName": "本地千问"
+      },
       "capabilities": {
         "maxOutputTokens": 4096,
         "supportsFunctionCalling": false
@@ -113,7 +131,7 @@ gemini --model qwen-coder-plus
 
 | 字段 | 说明 | 示例 |
 |-----|------|------|
-| `provider` | 模型提供商标识 | `"qwen"`, `"deepseek"`, `"custom"` |
+| `provider` | 统一使用 `"openai"` | `"openai"` |
 | `model` | 模型名称 | `"qwen-coder-plus"` |
 | `baseUrl` | API 端点 URL | `"https://api.example.com/v1"` |
 
@@ -122,26 +140,40 @@ gemini --model qwen-coder-plus
 | 字段 | 说明 | 默认值 |
 |-----|------|--------|
 | `apiKey` | API 密钥 | 从环境变量读取 |
-| `adapterType` | 适配器类型 | 自动推断 |
+| `metadata` | Provider 元数据（身份识别、环境变量） | `{}` |
 | `capabilities` | 模型能力描述 | 见下文 |
 | `options` | 其他选项 | `{}` |
 | `customHeaders` | 自定义 HTTP 头 | `{}` |
 
-### 适配器类型 (adapterType)
+### Provider 元数据 (metadata)
 
-指定使用哪种适配器来与模型通信：
+**新增字段**，用于身份识别和环境变量自定义：
 
-- `"openai"` - OpenAI 兼容 API（推荐，适用于大多数模型）
-- `"claude"` - Claude API 格式
-- `"custom"` - 自定义适配器（高度灵活）
-- `"gemini"` - Google Gemini（内置支持）
+```json
+{
+  "metadata": {
+    "providerName": "qwen",           // 身份标识（用于 system prompt）
+    "displayName": "通义千问",         // 显示名称
+    "envKeyNames": ["QWEN_API_KEY"]  // 自定义环境变量名（可选）
+  }
+}
+```
 
-**自动推断规则**：
-- `provider: "qwen"` → `adapterType: "openai"`
-- `provider: "deepseek"` → `adapterType: "openai"`
-- `provider: "openai"` → `adapterType: "openai"`
-- `provider: "claude"` → `adapterType: "claude"`
-- 其他 → `adapterType: "custom"`
+**字段说明**：
+
+- **`providerName`**（推荐）：
+  - 用于身份识别，模型会知道自己是"通义千问"、"DeepSeek"等
+  - 用于环境变量自动查找（如 `"qwen"` → 自动查找 `QWEN_API_KEY`）
+  - 常见值：`"qwen"`, `"deepseek"`, `"openai"`, `"moonshot"`, `"zhipu"`, `"custom"`
+
+- **`displayName`**（可选）：
+  - 显示给用户的友好名称
+  - 例如：`"通义千问"`, `"DeepSeek"`, `"我的模型"`
+
+- **`envKeyNames`**（可选）：
+  - 自定义环境变量名称列表（按优先级）
+  - 例如：`["MY_CUSTOM_KEY", "FALLBACK_KEY"]`
+  - 如果不指定，系统会根据 `providerName` 自动查找
 
 ### 模型能力 (capabilities)
 
@@ -150,34 +182,49 @@ gemini --model qwen-coder-plus
 ```json
 {
   "capabilities": {
-    "maxInputTokens": 32768,      // 最大输入 tokens
-    "maxOutputTokens": 8192,      // 最大输出 tokens（重要！）
-    "supportsStreaming": true,    // 是否支持流式输出
-    "supportsFunctionCalling": true,  // 是否支持函数调用
-    "supportsVision": false,      // 是否支持图片输入
-    "supportsTools": true,        // 是否支持工具调用
-    "supportsMultimodal": false   // 是否支持 multimodal 消息格式（数组格式）
+    "maxInputTokens": 32768,            // 最大输入 tokens
+    "maxOutputTokens": 8192,            // 最大输出 tokens（重要！）
+    "supportsStreaming": true,          // 是否支持流式输出
+    "supportsFunctionCalling": true,    // 是否支持函数调用
+    "supportsVision": false,            // 是否支持图片输入
+    "supportsTools": true,              // 是否支持工具调用
+    "supportsMultimodal": true          // 是否支持 multimodal 消息格式
   }
 }
 ```
 
 **重要提示**：
-- `maxOutputTokens` **必须正确设置**，否则可能导致 API 错误（如 "Range of max_tokens should be [1, 8192]"）
-- `supportsMultimodal` **非常关键**：
-  - **默认值**: `true`（OpenAI 标准格式）
-  - **何时设置为 `false`**: 如果模型不支持 OpenAI 的 multimodal 消息格式（`content` 为数组 `[{type: 'text', text: '...'}]`），必须设置为 `false`
-  - **作用**: 将消息内容转换为简单字符串格式（`content: "..."`）
-  - **适用模型**: DeepSeek、部分国产大模型、本地小模型
-  - **错误信号**: 如果看到 `"invalid type: sequence, expected a string"` 错误，说明需要设置 `supportsMultimodal: false`
+
+1. **`maxOutputTokens`**：
+   - **必须正确设置**，否则可能导致 API 错误
+   - 查看模型官方文档确定具体值
+
+2. **`supportsFunctionCalling`**：
+   - `true`：模型支持函数调用，系统会发送 `tools` 参数
+   - `false`：模型不支持函数调用，系统会过滤掉工具定义
+   - 默认值：`true`
+   - **何时设置为 `false`**：
+     - 本地部署的模型
+     - 不支持 tool_choice 的 API
+     - 报错 `"auto" tool choice requires ...` 时
+
+3. **`supportsMultimodal`**：
+   - `true`：使用数组格式 `content: [{type: 'text', text: '...'}]`
+   - `false`：使用字符串格式 `content: "..."`
+   - 默认值：`true`
+   - **何时设置为 `false`**：
+     - DeepSeek 全系列
+     - 报错 `"invalid type: sequence, expected a string"` 时
+     - 简化版 OpenAI 兼容 API
 
 ### 其他选项 (options)
 
 ```json
 {
   "options": {
-    "temperature": 0.1,           // 温度参数
-    "completionEndpoint": "/chat/completions",  // API 端点路径
-    "responseFormat": "openai"    // 响应格式
+    "temperature": 0.1,
+    "completionEndpoint": "/chat/completions",
+    "responseFormat": "openai"
   }
 }
 ```
@@ -191,47 +238,80 @@ gemini --model qwen-coder-plus
 ```json
 {
   "qwen-max": {
-    "provider": "qwen",
-    "adapterType": "openai",
+    "provider": "openai",
     "model": "qwen-max",
     "apiKey": "sk-xxx",
     "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "metadata": {
+      "providerName": "qwen",
+      "displayName": "通义千问"
+    },
     "capabilities": {
-      "maxOutputTokens": 8000
+      "maxOutputTokens": 8000,
+      "supportsFunctionCalling": true,
+      "supportsMultimodal": true
     }
   }
 }
 ```
 
-#### 百度文心一言
+#### DeepSeek
 
 ```json
 {
-  "ernie-4": {
-    "provider": "custom",
-    "adapterType": "openai",
-    "model": "ernie-4.0",
-    "apiKey": "your-api-key",
-    "baseUrl": "https://aip.baidubce.com/rpc/2.0/ai_custom/v1",
+  "deepseek-coder": {
+    "provider": "openai",
+    "model": "deepseek-coder",
+    "baseUrl": "https://api.deepseek.com",
+    "metadata": {
+      "providerName": "deepseek",
+      "displayName": "DeepSeek"
+    },
     "capabilities": {
-      "maxOutputTokens": 4096
+      "maxOutputTokens": 4096,
+      "supportsFunctionCalling": false,
+      "supportsMultimodal": false
     }
   }
 }
 ```
 
-#### 智谱 GLM
+#### 智谱 AI (GLM)
 
 ```json
 {
   "glm-4": {
-    "provider": "zhipu",
-    "adapterType": "openai",
+    "provider": "openai",
     "model": "glm-4",
     "apiKey": "your-api-key",
     "baseUrl": "https://open.bigmodel.cn/api/paas/v4",
+    "metadata": {
+      "providerName": "zhipu",
+      "displayName": "智谱AI"
+    },
     "capabilities": {
-      "maxOutputTokens": 4096
+      "maxOutputTokens": 8192,
+      "supportsFunctionCalling": true
+    }
+  }
+}
+```
+
+#### 月之暗面 (Moonshot/Kimi)
+
+```json
+{
+  "moonshot-v1": {
+    "provider": "openai",
+    "model": "moonshot-v1-8k",
+    "baseUrl": "https://api.moonshot.cn/v1",
+    "metadata": {
+      "providerName": "moonshot",
+      "displayName": "Kimi"
+    },
+    "capabilities": {
+      "maxOutputTokens": 8192,
+      "supportsFunctionCalling": true
     }
   }
 }
@@ -243,13 +323,17 @@ gemini --model qwen-coder-plus
 
 ```json
 {
-  "ollama-llama3": {
-    "provider": "custom",
-    "adapterType": "openai",
-    "model": "llama3",
+  "ollama-qwen": {
+    "provider": "openai",
+    "model": "Qwen2.5-Coder-32B-Instruct",
+    "apiKey": "not-required",
     "baseUrl": "http://localhost:11434/v1",
+    "metadata": {
+      "providerName": "qwen",
+      "displayName": "Ollama 千问"
+    },
     "capabilities": {
-      "maxOutputTokens": 2048,
+      "maxOutputTokens": 4096,
       "supportsFunctionCalling": false
     }
   }
@@ -260,13 +344,18 @@ gemini --model qwen-coder-plus
 
 ```json
 {
-  "lm-studio": {
-    "provider": "custom",
-    "adapterType": "openai",
+  "lmstudio-local": {
+    "provider": "openai",
     "model": "local-model",
+    "apiKey": "not-required",
     "baseUrl": "http://localhost:1234/v1",
+    "metadata": {
+      "providerName": "custom",
+      "displayName": "LM Studio"
+    },
     "capabilities": {
-      "maxOutputTokens": 4096
+      "maxOutputTokens": 4096,
+      "supportsFunctionCalling": false
     }
   }
 }
@@ -277,17 +366,43 @@ gemini --model qwen-coder-plus
 ```json
 {
   "company-llm": {
-    "provider": "custom",
-    "adapterType": "openai",
+    "provider": "openai",
     "model": "company-gpt",
     "apiKey": "internal-key",
     "baseUrl": "https://ai.company.internal/v1",
+    "metadata": {
+      "providerName": "custom",
+      "displayName": "企业AI",
+      "envKeyNames": ["COMPANY_AI_KEY", "INTERNAL_API_KEY"]
+    },
     "customHeaders": {
       "X-Company-Auth": "additional-auth"
     },
     "capabilities": {
       "maxOutputTokens": 8192,
       "supportsFunctionCalling": true
+    }
+  }
+}
+```
+
+### 场景4: 华为内部模型
+
+```json
+{
+  "qwen-mlops": {
+    "provider": "openai",
+    "model": "Qwen2.5-Coder-32B-Instruct-20250626105438",
+    "apiKey": "your-mlops-key",
+    "baseUrl": "http://mlops.huawei.com/mlops-service/api/v2/agentService/v1",
+    "metadata": {
+      "providerName": "qwen",
+      "displayName": "华为通义千问"
+    },
+    "capabilities": {
+      "maxOutputTokens": 4096,
+      "supportsFunctionCalling": false,
+      "supportsMultimodal": true
     }
   }
 }
@@ -311,6 +426,7 @@ gemini --model qwen-coder-plus
 # 在 ~/.bashrc 或 ~/.zshrc 中
 export QWEN_API_KEY="sk-your-qwen-key"
 export DEEPSEEK_API_KEY="sk-your-deepseek-key"
+export OPENAI_API_KEY="sk-your-openai-key"
 ```
 
 配置文件中省略 `apiKey`：
@@ -318,19 +434,53 @@ export DEEPSEEK_API_KEY="sk-your-deepseek-key"
 ```json
 {
   "qwen-coder-plus": {
-    "provider": "qwen",
+    "provider": "openai",
     "model": "qwen-coder-plus",
-    "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "metadata": {
+      "providerName": "qwen"
+    }
   }
 }
 ```
 
-系统会自动查找以下环境变量：
-- Qwen: `QWEN_API_KEY`, `QWEN_CODER_API_KEY`, `DASHSCOPE_API_KEY`
-- DeepSeek: `DEEPSEEK_API_KEY`
-- 通用: `CUSTOM_API_KEY`, `API_KEY`
+### 环境变量自动发现
 
-### 方式3: .env 文件
+系统会根据 `metadata.providerName` 自动查找对应的环境变量：
+
+| ProviderName | 自动查找的环境变量（优先级从高到低） |
+|--------------|--------------------------|
+| `openai` | `OPENAI_API_KEY` |
+| `qwen` | `QWEN_API_KEY`, `QWEN_CODER_API_KEY`, `DASHSCOPE_API_KEY` |
+| `deepseek` | `DEEPSEEK_API_KEY` |
+| `moonshot` | `MOONSHOT_API_KEY`, `KIMI_API_KEY` |
+| `zhipu` | `ZHIPU_API_KEY`, `GLM_API_KEY` |
+| `minimax` | `MINIMAX_API_KEY` |
+
+### 方式3: 自定义环境变量名
+
+通过 `metadata.envKeyNames` 指定自定义环境变量名：
+
+```json
+{
+  "my-model": {
+    "provider": "openai",
+    "model": "my-model",
+    "baseUrl": "https://api.example.com/v1",
+    "metadata": {
+      "providerName": "custom",
+      "envKeyNames": ["MY_CUSTOM_API_KEY", "FALLBACK_API_KEY"]
+    }
+  }
+}
+```
+
+系统会按顺序查找：
+1. `MY_CUSTOM_API_KEY`
+2. `FALLBACK_API_KEY`
+3. 如果都没有，则报错
+
+### 方式4: .env 文件
 
 在项目根目录创建 `.env` 文件：
 
@@ -341,11 +491,90 @@ DEEPSEEK_API_KEY=sk-your-deepseek-key
 
 ## 故障排查
 
-### 错误: "Range of max_tokens should be [1, 8192]"
+### 错误: `"auto" tool choice requires --enable-auto-tool-choice ...`
 
-**原因**: `maxOutputTokens` 超出模型限制
+**完整错误**：
+```
+"auto" tool choice requires --enable-auto-tool-choice and --tool-call-parser to be set
+```
 
-**解决方法**: 在配置中设置正确的 `maxOutputTokens`：
+**原因**：模型不支持 tool_choice 参数
+
+**解决方法**：设置 `supportsFunctionCalling: false`
+
+```json
+{
+  "capabilities": {
+    "supportsFunctionCalling": false
+  }
+}
+```
+
+### 错误: `No API key found`
+
+**完整错误**：
+```
+No API key found for openai. Set OPENAI_API_KEY environment variable.
+```
+
+**原因**：未配置 API Key
+
+**解决方案**：
+1. 在配置文件中添加 `apiKey`
+2. 或设置对应的环境变量（根据 `providerName` 自动查找）
+3. 或在 `metadata.envKeyNames` 中指定自定义环境变量名
+
+**示例**：
+
+```json
+{
+  "metadata": {
+    "providerName": "qwen"  // 系统会自动查找 QWEN_API_KEY
+  }
+}
+```
+
+或：
+
+```json
+{
+  "metadata": {
+    "envKeyNames": ["MY_CUSTOM_KEY"]  // 系统会查找 MY_CUSTOM_KEY
+  }
+}
+```
+
+### 错误: `invalid type: sequence, expected a string`
+
+**完整错误**：
+```
+Failed to deserialize the JSON body into the target type:
+messages[4]: invalid type: sequence, expected a string at line 1 column 25581
+```
+
+**原因**：模型不支持 OpenAI 的 multimodal 消息格式（content 为数组）
+
+**解决方法**：设置 `supportsMultimodal: false`
+
+```json
+{
+  "capabilities": {
+    "supportsMultimodal": false
+  }
+}
+```
+
+**适用场景**：
+- ✅ DeepSeek 全系列模型
+- ✅ 部分国产大模型
+- ✅ 本地部署的小模型
+- ✅ 简化版 OpenAI 兼容 API
+
+### 错误: `Range of max_tokens should be [1, 8192]`
+
+**原因**：`maxOutputTokens` 超出模型限制
+
+**解决方法**：根据模型官方文档设置正确的 `maxOutputTokens`
 
 ```json
 {
@@ -355,75 +584,18 @@ DEEPSEEK_API_KEY=sk-your-deepseek-key
 }
 ```
 
-### 错误: "No adapter registered for provider"
+### 错误: 模型身份识别错误
 
-**原因**: 未指定 `adapterType` 且无法自动推断
+**问题**：模型说自己是错误的身份（如通义千问说自己是 ChatGPT）
 
-**解决方法**: 明确指定 `adapterType`：
+**原因**：未配置 `metadata.providerName`
 
-```json
-{
-  "provider": "my-custom-provider",
-  "adapterType": "openai"  // 显式指定
-}
-```
-
-### 错误: "Authentication failed"
-
-**原因**: API key 无效或未设置
-
-**解决方法**:
-1. 检查 `apiKey` 配置是否正确
-2. 检查环境变量是否设置
-3. 验证 API key 在提供商网站上是否有效
-
-### 错误: "invalid type: sequence, expected a string"
-
-**原因**: 模型不支持 OpenAI 的 multimodal 消息格式（content 为数组）
-
-**完整错误示例**:
-```
-Failed to deserialize the JSON body into the target type:
-messages[4]: invalid type: sequence, expected a string at line 1 column 25581
-```
-
-**解决方法**: 在配置中设置 `supportsMultimodal: false`：
+**解决方法**：检查 `metadata.providerName` 配置
 
 ```json
 {
-  "deepseek-coder": {
-    "provider": "deepseek",
-    "adapterType": "openai",
-    "model": "deepseek-coder",
-    "apiKey": "sk-xxx",
-    "baseUrl": "https://api.deepseek.com",
-    "capabilities": {
-      "maxOutputTokens": 4096,
-      "supportsMultimodal": false  // ← 关键设置
-    }
-  }
-}
-```
-
-**验证**: 设置后应该能看到调试日志显示 `supportsMultimodal: false`（需启用 `DEBUG_MODEL_REQUESTS=1`）
-
-**适用场景**:
-- ✅ DeepSeek 全系列模型
-- ✅ 部分国产大模型（如需要，请尝试）
-- ✅ 本地部署的小模型（如果不支持数组格式）
-- ✅ 简化版 OpenAI 兼容 API
-
-### 模型响应格式错误
-
-**原因**: 模型返回的格式与适配器不兼容
-
-**解决方法**: 尝试不同的适配器类型或使用 `custom` 适配器：
-
-```json
-{
-  "adapterType": "custom",
-  "options": {
-    "responseFormat": "openai"  // 或 "claude" 或 "raw"
+  "metadata": {
+    "providerName": "qwen"  // 确保这个值正确
   }
 }
 ```
@@ -438,38 +610,60 @@ messages[4]: invalid type: sequence, expected a string at line 1 column 25581
   "defaultModel": "qwen-coder-plus",
   "models": {
     "qwen-coder-plus": {
-      "provider": "qwen",
-      "adapterType": "openai",
+      "provider": "openai",
       "model": "qwen-coder-plus",
-      "apiKey": "sk-qwen-key",
       "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "metadata": {
+        "providerName": "qwen",
+        "displayName": "通义千问"
+      },
       "capabilities": {
         "maxOutputTokens": 8192,
-        "supportsFunctionCalling": true
+        "supportsFunctionCalling": true,
+        "supportsMultimodal": true
       }
     },
     "deepseek-coder": {
-      "provider": "deepseek",
-      "adapterType": "openai",
+      "provider": "openai",
       "model": "deepseek-coder",
-      "apiKey": "sk-deepseek-key",
       "baseUrl": "https://api.deepseek.com",
+      "metadata": {
+        "providerName": "deepseek",
+        "displayName": "DeepSeek"
+      },
       "capabilities": {
         "maxOutputTokens": 4096,
-        "supportsMultimodal": false  // DeepSeek 必需
+        "supportsFunctionCalling": false,
+        "supportsMultimodal": false
       }
     },
-    "local-llama": {
-      "provider": "custom",
-      "adapterType": "openai",
-      "model": "llama3-70b",
+    "local-qwen": {
+      "provider": "openai",
+      "model": "Qwen2.5-Coder-32B-Instruct",
+      "apiKey": "not-required",
       "baseUrl": "http://localhost:11434/v1",
+      "metadata": {
+        "providerName": "qwen",
+        "displayName": "本地千问"
+      },
       "capabilities": {
         "maxOutputTokens": 4096,
         "supportsFunctionCalling": false
       }
+    },
+    "gpt-4o-mini": {
+      "provider": "openai",
+      "model": "gpt-4o-mini",
+      "metadata": {
+        "providerName": "openai"
+      },
+      "capabilities": {
+        "maxOutputTokens": 16384,
+        "supportsFunctionCalling": true
+      }
     }
-  }
+  },
+  "fallbackModels": ["gpt-4o-mini"]
 }
 ```
 
@@ -487,98 +681,104 @@ export DEBUG_MODEL_REQUESTS=1
 然后运行命令，会看到详细的调试信息：
 
 ```
-[DEBUG] OpenAIAdapter.generateContent: {
-  provider: 'openai',
-  model: 'deepseek-coder',
-  supportsMultimodal: false,  // ← 验证配置是否生效
-  capabilities: { maxOutputTokens: 4096, supportsMultimodal: false },
-  messageCount: 5
+[2025-10-16T13:13:00.347Z] INFO Creating new adapter {
+  "provider": "openai",
+  "model": "qwen-coder-plus",
+  "metadata": { "providerName": "qwen" }
 }
 
-[DEBUG] Converted message (supportsMultimodal=false): {
-  role: 'user',
-  contentType: 'string',  // ← 确认是字符串而非数组
-  contentLength: 123
+[2025-10-16T13:13:00.347Z] INFO Adapter validation successful {
+  "provider": "openai",
+  "model": "qwen-coder-plus",
+  "supportsMultimodal": true,
+  "supportsFunctionCalling": true
 }
 ```
 
-### 常见调试场景
+### 验证配置加载
 
-1. **验证 capabilities 是否加载**:
-   - 查看 `capabilities: { ... }` 是否显示完整内容
-   - 如果是 `undefined`，说明配置加载有问题
+检查 `metadata` 和 `capabilities` 是否正确加载：
 
-2. **验证消息格式转换**:
-   - `supportsMultimodal: false` 时，所有消息的 `contentType` 应为 `'string'`
-   - 如果仍是数组，说明转换逻辑未生效
-
-3. **查看实际发送的请求**:
-   - 调试日志会显示发送到 API 的完整消息结构
-   - 检查 `content` 字段是字符串还是数组
-
-## 贡献模型配置
-
-如果你成功配置了新模型，欢迎贡献配置模板！
-
-**提交前检查清单**：
-- ✅ 模型能正常响应基本对话
-- ✅ `/init` 命令能成功执行
-- ✅ `maxOutputTokens` 已根据官方文档设置
-- ✅ `supportsMultimodal` 已根据实际测试调整
-- ✅ 已移除敏感信息（API Key）
-
-创建一个新文件，如 `your-model.json`：
-
-```json
-{
-  "description": "配置说明和测试结果",
-  "provider": "provider-name",
-  "homepage": "https://provider-website.com",
-  "tested": true,
-  "config": {
-    "your-model": {
-      "provider": "provider-name",
-      "adapterType": "openai",
-      "model": "model-name",
-      "baseUrl": "https://api.provider.com/v1",
-      "capabilities": {
-        "maxOutputTokens": 8192,
-        "supportsMultimodal": true  // 注明是否支持
-      }
-    }
+```
+[DEBUG] ModelConfig loaded: {
+  provider: 'openai',
+  model: 'qwen-coder-plus',
+  metadata: {
+    providerName: 'qwen',
+    displayName: '通义千问'
   },
-  "notes": [
-    "特别注意事项",
-    "已知限制"
-  ]
+  capabilities: {
+    maxOutputTokens: 8192,
+    supportsFunctionCalling: true,
+    supportsMultimodal: true
+  }
 }
+```
+
+### 验证环境变量发现
+
+检查 API Key 是否正确查找：
+
+```
+[DEBUG] API Key discovery:
+  - Trying custom env keys: undefined
+  - Trying provider 'qwen' env keys: QWEN_API_KEY, QWEN_CODER_API_KEY, DASHSCOPE_API_KEY
+  - Found: QWEN_API_KEY
 ```
 
 ## 成功案例
 
-### DeepSeek-Coder 完整配置（已验证 ✅）
+### 通义千问 (Qwen) - 已验证 ✅
 
 ```json
 {
-  "useModelRouter": true,
-  "defaultModel": "deepseek-coder",
-  "models": {
-    "deepseek-coder": {
-      "provider": "deepseek",
-      "adapterType": "openai",
-      "model": "deepseek-coder",
-      "apiKey": "sk-your-deepseek-key",
-      "baseUrl": "https://api.deepseek.com",
-      "capabilities": {
-        "maxOutputTokens": 4096,
-        "supportsMultimodal": false
-      },
-      "options": {
-        "responseFormat": "openai",
-        "maxTokens": 4000,
-        "temperature": 0.1,
-        "completionEndpoint": "/chat/completions"
-      }
+  "qwen-coder-plus": {
+    "provider": "openai",
+    "model": "qwen-coder-plus",
+    "apiKey": "sk-your-qwen-key",
+    "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "metadata": {
+      "providerName": "qwen",
+      "displayName": "通义千问"
+    },
+    "capabilities": {
+      "maxOutputTokens": 8192,
+      "supportsFunctionCalling": true,
+      "supportsMultimodal": true
+    }
+  }
+}
+```
+
+**验证结果**：
+- ✅ 基本对话正常
+- ✅ 函数调用支持良好
+- ✅ 流式输出正常
+- ✅ 多轮对话历史正确
+- ✅ 身份识别正确（说"我是通义千问"）
+
+### DeepSeek - 已验证 ✅
+
+```json
+{
+  "deepseek-coder": {
+    "provider": "openai",
+    "model": "deepseek-coder",
+    "apiKey": "sk-your-deepseek-key",
+    "baseUrl": "https://api.deepseek.com",
+    "metadata": {
+      "providerName": "deepseek",
+      "displayName": "DeepSeek"
+    },
+    "capabilities": {
+      "maxOutputTokens": 4096,
+      "supportsFunctionCalling": false,
+      "supportsMultimodal": false
+    },
+    "options": {
+      "responseFormat": "openai",
+      "maxTokens": 4000,
+      "temperature": 0.1
     }
   }
 }
@@ -587,56 +787,62 @@ export DEBUG_MODEL_REQUESTS=1
 **验证结果**：
 - ✅ 基本对话正常
 - ✅ `/init` 命令成功执行
-- ✅ 工具调用（文件读写、命令执行）正常
+- ✅ 工具调用正常
 - ✅ 流式输出正常
 - ✅ 多轮对话历史正确处理
 
-**关键配置说明**：
-- `supportsMultimodal: false` 是**必需的**，否则会报 "invalid type: sequence" 错误
-- `maxOutputTokens: 4096` 符合 DeepSeek 官方限制
-- 使用 `openai` adapter，无需额外代码
+**关键配置**：
+- `supportsFunctionCalling: false` 是**必需的**
+- `supportsMultimodal: false` 是**必需的**
+- 否则会报错
 
-### 通义千问 Qwen 完整配置（已验证 ✅）
+### 本地模型 (Ollama) - 已验证 ✅
 
 ```json
 {
-  "qwen-coder-plus": {
-    "provider": "qwen",
-    "adapterType": "openai",
-    "model": "qwen-coder-plus",
-    "apiKey": "sk-your-qwen-key",
-    "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-    "capabilities": {
-      "maxOutputTokens": 8192,
-      "supportsMultimodal": true
+  "ollama-qwen": {
+    "provider": "openai",
+    "model": "Qwen2.5-Coder-32B-Instruct",
+    "apiKey": "not-required",
+    "baseUrl": "http://localhost:11434/v1",
+    "metadata": {
+      "providerName": "qwen",
+      "displayName": "Ollama 千问"
     },
-    "options": {
-      "responseFormat": "openai",
-      "maxTokens": 4000,
-      "temperature": 0.1,
-      "healthEndpoint": "/models"
+    "capabilities": {
+      "maxOutputTokens": 4096,
+      "supportsFunctionCalling": false
     }
   }
 }
 ```
 
 **验证结果**：
-- ✅ 全功能正常
-- ✅ 支持标准 multimodal 格式
-- ✅ 函数调用支持良好
+- ✅ 本地部署正常
+- ✅ 基本对话正常
+- ✅ 无需 API Key
 
 ## 相关文档
 
-- [架构设计](../DESIGN_UNIVERSAL_MODEL_SUPPORT.md) - 通用模型支持的架构设计（含实现细节）
-- [配置参考](./CONFIGURATION.md) - 完整配置选项说明
-- [适配器开发](../packages/core/src/adapters/README.md) - 如何开发自定义适配器
+- [架构设计](./universal-model-support.md) - 统一 Provider 方案的架构设计
+- [模型系统概述](./README.md) - 模型支持系统的总体说明
 
 ## 获取帮助
 
 如果遇到问题：
 
-1. **首先启用调试日志**: `DEBUG_MESSAGE_FORMAT=1 DEBUG_MODEL_REQUESTS=1`
+1. **首先启用调试日志**：`DEBUG_MESSAGE_FORMAT=1 DEBUG_MODEL_REQUESTS=1`
 2. 查看本文档的"故障排查"部分
-3. 查看 [架构设计文档](../DESIGN_UNIVERSAL_MODEL_SUPPORT.md) 的"已知限制"部分
+3. 查看 [架构设计文档](./universal-model-support.md) 的详细说明
 4. 搜索已有 [Issues](https://github.com/your-repo/issues)
 5. 提交新的 [Issue](https://github.com/your-repo/issues/new)（附带调试日志）
+
+## 总结
+
+统一 Provider 方案的核心要点：
+
+1. **统一接口**：所有 OpenAI 兼容模型使用 `provider: "openai"`
+2. **身份识别**：通过 `metadata.providerName` 识别模型身份
+3. **环境变量**：自动查找或通过 `metadata.envKeyNames` 自定义
+4. **能力控制**：通过 `capabilities` 精确控制模型特性
+5. **零代码扩展**：无需修改代码即可支持任意 OpenAI 兼容服务

@@ -383,6 +383,12 @@ export class APITranslator {
           parameters: tool.parameters
         }
       }));
+
+      // Add tool_choice if specified in request, otherwise don't set it
+      // (some models don't support "auto" by default)
+      if (request.toolChoice) {
+        result.tool_choice = request.toolChoice;
+      }
     }
 
     return result;

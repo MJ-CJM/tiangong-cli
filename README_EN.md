@@ -33,6 +33,7 @@
 | 🎭 **Agent System** | Create specialized AI assistants with independent contexts and tool permissions | ✅ Completed |
 | 🧭 **Intelligent Routing & Handoff** | Automatically select the best Agent, support Agent collaboration | ✅ Completed |
 | 🔄 **Workflow System** | Multi-Agent orchestration with sequential and parallel execution | ✅ Completed |
+| 📋 **Plan+Todo Mode** | Plan first, execute later with structured task breakdown and management | ✅ Completed |
 | 🎯 **Mode Switching System** | Professional modes like Plan, Spec, Code, etc. | 📋 Planned |
 
 ### ⚡ Inherited Powerful Features
@@ -110,13 +111,17 @@ Add to `~/.gemini/config.json`:
   "defaultModel": "qwen-coder-plus",
   "models": {
     "qwen-coder-plus": {
-      "provider": "qwen",
-      "adapterType": "openai",
+      "provider": "openai",
       "model": "qwen-coder-plus",
       "apiKey": "sk-your-api-key",
       "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "metadata": {
+        "providerName": "qwen",
+        "displayName": "Tongyi Qianwen"
+      },
       "capabilities": {
-        "maxOutputTokens": 8192
+        "maxOutputTokens": 8192,
+        "supportsFunctionCalling": true
       }
     }
   }
@@ -129,13 +134,17 @@ Add to `~/.gemini/config.json`:
 {
   "models": {
     "deepseek-coder": {
-      "provider": "deepseek",
-      "adapterType": "openai",
+      "provider": "openai",
       "model": "deepseek-coder",
       "apiKey": "sk-your-api-key",
       "baseUrl": "https://api.deepseek.com",
+      "metadata": {
+        "providerName": "deepseek",
+        "displayName": "DeepSeek"
+      },
       "capabilities": {
         "maxOutputTokens": 4096,
+        "supportsFunctionCalling": false,
         "supportsMultimodal": false
       }
     }
@@ -153,7 +162,7 @@ Add to `~/.gemini/config.json`:
 gemini --model deepseek-coder
 ```
 
-<!-- 📚 **Detailed Documentation**: [How to Add New Models](./docs/ADD_NEW_MODEL.md) -->
+📚 **Detailed Documentation**: [How to Add New Models](./design/models/add-new-model-guide.md) | [Model System Design](./design/models/universal-model-support.md) | [Model System Overview](./design/models/README.md)
 
 ---
 
@@ -294,11 +303,7 @@ Before doing anything, determine the task type:
 /agents info code-review
 ```
 
-<!-- 
-📚 **Detailed Documentation**:
-- [Agent User Guide](./docs/AGENTS.md)
-- [Agent Quick Start](./AGENTS_QUICK_START.md)
--->
+📚 **Detailed Documentation**: [Agents User Guide](./design/agents/USER_GUIDE.md) | [Quick Start](./design/agents/QUICK_START.md) | [System Design](./design/agents/DESIGN.md) | [Implementation](./design/agents/IMPLEMENTATION.md) | [Commands](./design/agents/COMMANDS.md)
 
 ---
 
@@ -408,7 +413,7 @@ The code_review agent focuses on code review. When it detects that the user actu
 - ✅ Depth Limit: Maximum handoff depth of 5 levels
 - ✅ Tracking Mechanism: Each handoff chain has a unique correlation_id
 
-<!-- 📚 **Detailed Documentation**: [Intelligent Routing & Handoff Features](./AGENTS_P2_FEATURES.md) -->
+📚 **Detailed Documentation**: [Intelligent Routing](./design/agents/routing/README.md) | [Agent Handoff](./design/agents/handoff/README.md) | [P2 Completion Summary](./design/agents/completion-summaries/p2-completion.md)
 
 ---
 
@@ -570,7 +575,7 @@ ${parallelGroupId.data.total_count}
 
 **Current Status**: ✅ Completed, including WorkflowManager, WorkflowExecutor, CLI integration, parallel execution, complete documentation
 
-📚 **Detailed Documentation**: [Workflow Complete Guide](./docs/WORKFLOWS.md) | [System Design](./design/agents/WORKFLOW_DESIGN.md)
+📚 **Detailed Documentation**: [Workflow User Guide](./design/workflows/USER_GUIDE.md) | [System Design](./design/workflows/design.md) | [Workflow Overview](./design/workflows/README.md)
 
 ---
 
@@ -728,41 +733,30 @@ Response: { token, user }
 
 ---
 
-<!-- 
 ## 📚 Documentation Navigation
-
-Documentation is being organized, stay tuned...
 
 ### User Guides
 
-- 🚀 [Quick Start](./AGENTS_QUICK_START.md) - 5-minute tutorial
-- 📖 [Agent User Guide](./docs/AGENTS.md) - Complete Agent system documentation
-- 🤖 [How to Add New Models](./docs/ADD_NEW_MODEL.md) - Custom model configuration guide
-- 🧭 [Intelligent Routing Features](./AGENTS_P2_FEATURES.md) - Routing and handoff explained
-- 🔄 [Workflow System](./design/agents/WORKFLOW_DESIGN.md) - Workflow system design
-
-### Feature Documentation
-
-- ⚙️ [Configuration Guide](./docs/cli/configuration.md) - Complete configuration options
-- 🔧 [Command Reference](./docs/cli/commands.md) - All command descriptions
-- 🛠️ [Tool API](./docs/tools/index.md) - Built-in tool documentation
-- 🔌 [MCP Integration](./docs/tools/mcp-server.md) - MCP server configuration
-
-### Development Documentation
-
-- 🏗️ [Architecture Design](./docs/architecture.md) - System architecture overview
-- 🎨 [Universal Model Support](./design/DESIGN_UNIVERSAL_MODEL_SUPPORT.md) - Model architecture design
-- 🤝 [Contributing Guide](./CONTRIBUTING.md) - How to contribute
-- 📝 [Development Setup](./study/06-dev-setup.md) - Development environment configuration
+- 🎭 [Agents User Guide](./design/agents/USER_GUIDE.md) - Complete Agents usage manual
+- 🚀 [Agents Quick Start](./design/agents/QUICK_START.md) - 5-minute tutorial
+- 🔄 [Workflow User Guide](./design/workflows/USER_GUIDE.md) - Complete Workflow usage guide
+- 📋 [Plan+Todo User Manual](./design/plan-todo/COMPLETE_USER_MANUAL.md) - Complete Plan+Todo manual
+- 🤖 [How to Add New Models](./design/models/add-new-model-guide.md) - Custom model configuration guide
 
 ### Design Documents
 
-- 📐 [Agent System Design](./design/agents/DESIGN.md) - Agent architecture design
-- 🚦 [Routing System Design](./design/agents/P2_ROUTING_HANDOFF_DESIGN.md) - Intelligent routing design
-- 🔄 [Workflow System Design](./design/agents/WORKFLOW_DESIGN.md) - Workflow architecture
-- 📊 [Workflow Implementation Progress](./WORKFLOW_PROGRESS.md) - Development progress tracking
-- 🗺️ [Feature Roadmap](./design/agents/ROADMAP.md) - Future plans
--->
+- 📐 [Architecture Design](./design/README.md) - Design documentation index for all features
+- 🎭 [Agents System Design](./design/agents/DESIGN.md) - Agents architecture design
+- 🧭 [Intelligent Routing](./design/agents/routing/README.md) - Routing feature design
+- 🔄 [Workflow System Design](./design/workflows/design.md) - Workflow architecture
+- 📋 [Plan+Todo Design](./design/plan-todo/DESIGN_AND_IMPLEMENTATION.md) - Plan+Todo architecture design
+- 🤖 [Model System Design](./design/models/universal-model-support.md) - Universal model support architecture
+
+### Development Documentation
+
+- 🏗️ [Architecture Overview](./docs/architecture.md) - System architecture overview
+- 🤝 [Contributing Guide](./CONTRIBUTING.md) - How to contribute
+- 📝 [Development Setup](./study/06-dev-setup.md) - Development environment setup
 
 ---
 
@@ -776,31 +770,43 @@ Documentation is being organized, stay tuned...
   "defaultModel": "qwen-coder-plus",
   "models": {
     "qwen-coder-plus": {
-      "provider": "qwen",
-      "adapterType": "openai",
+      "provider": "openai",
       "model": "qwen-coder-plus",
       "apiKey": "sk-qwen-key",
       "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "metadata": {
+        "providerName": "qwen",
+        "displayName": "Tongyi Qianwen"
+      },
       "capabilities": {
-        "maxOutputTokens": 8192
+        "maxOutputTokens": 8192,
+        "supportsFunctionCalling": true
       }
     },
     "deepseek-coder": {
-      "provider": "deepseek",
-      "adapterType": "openai",
+      "provider": "openai",
       "model": "deepseek-coder",
       "apiKey": "sk-deepseek-key",
       "baseUrl": "https://api.deepseek.com",
+      "metadata": {
+        "providerName": "deepseek",
+        "displayName": "DeepSeek"
+      },
       "capabilities": {
         "maxOutputTokens": 4096,
+        "supportsFunctionCalling": false,
         "supportsMultimodal": false
       }
     },
-    "local-llama": {
-      "provider": "custom",
-      "adapterType": "openai",
-      "model": "llama3-70b",
+    "local-qwen": {
+      "provider": "openai",
+      "model": "Qwen2.5-Coder-32B-Instruct",
+      "apiKey": "not-required",
       "baseUrl": "http://localhost:11434/v1",
+      "metadata": {
+        "providerName": "qwen",
+        "displayName": "Local Qwen"
+      },
       "capabilities": {
         "maxOutputTokens": 4096,
         "supportsFunctionCalling": false
@@ -958,6 +964,7 @@ TianGong CLI is developed based on Google Gemini CLI and is fully compatible wit
 | Agent Handoff | ❌ None | ✅ Intelligent Agent collaboration |
 | Workflow Sequential | ❌ None | ✅ Multi-Agent sequential orchestration |
 | Workflow Parallel | ❌ None | ✅ Multi-Agent parallel execution, significant speedup |
+| Plan+Todo Mode | ❌ None | ✅ Plan first execute later, batch execution support |
 | Mode Switching | ❌ None | 📋 Professional mode system (planned) |
 | Chinese Documentation | ❌ Primarily English | ✅ Complete Chinese documentation |
 

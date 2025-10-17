@@ -542,14 +542,14 @@ ls ~/.gemini/agents/
 ## 更多资源
 
 - **用户文档**:
-  - [已实现功能详解](../design/agents/FEATURES_IMPLEMENTED.md) - 所有功能的详细说明
-  - [命令参考](../design/agents/COMMANDS.md) - 完整的命令文档
-  - [快速开始](../design/agents/QUICK_START.md) - 快速入门指南
+  - [命令参考](./COMMANDS.md) - 完整的命令文档
+  - [快速开始](./QUICK_START.md) - 快速入门指南
 
 - **设计文档**:
-  - [系统设计](../design/agents/DESIGN.md) - 架构设计
-  - [P2 功能规划](../design/agents/P2_FEATURES.md) - 未来功能
-  - [实施细节](../design/agents/IMPLEMENTATION_DETAILS.md) - 技术实现
+  - [系统设计](./DESIGN.md) - 架构设计
+  - [实施细节](./IMPLEMENTATION.md) - 技术实现
+  - [路由系统](./routing/README.md) - 智能路由设计
+  - [移交系统](./handoff/README.md) - Agent 移交设计
 
 ---
 

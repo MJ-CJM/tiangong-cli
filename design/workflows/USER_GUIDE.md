@@ -892,8 +892,9 @@ timeout: 900000  # 15 分钟
 
 ## 相关文档
 
-- [Agent 系统文档](./AGENTS.md)
-- [并行 Workflow 设计](../design/agents/PARALLEL_WORKFLOWS.md)
+- [Agents 用户指南](../agents/USER_GUIDE.md)
+- [Workflow 系统设计](./design.md)
+- [Agents 系统概述](../agents/README.md)
 
 ---
 

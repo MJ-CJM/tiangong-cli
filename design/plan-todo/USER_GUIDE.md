@@ -553,7 +553,8 @@ Completed: 3/8 todos
 
 ## 下一步
 
-- 📖 查看 [API 参考](./API.md) 了解详细命令语法
+- 📖 查看 [完整用户手册](./COMPLETE_USER_MANUAL.md) 了解更多详细功能
+- 📚 查看 [API 参考](./API.md) 了解详细命令语法
 - 🏗️ 查看 [设计与实现](./DESIGN_AND_IMPLEMENTATION.md) 了解技术细节
 - 💡 开始使用：按 `Ctrl+P` 进入 Plan 模式！
 

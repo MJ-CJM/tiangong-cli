@@ -169,10 +169,11 @@
 ## 🔗 相关资源
 
 ### 📚 用户文档
-- [完整用户指南](../docs/AGENTS.md)
-- [Workflow 使用指南](../docs/WORKFLOWS.md)
-- [Plan+Todo 模式用户手册](../docs/PLAN_TODO_MODE_USER_GUIDE.md)
-- [添加新模型](../docs/ADD_NEW_MODEL.md)
+- [Agents 用户指南](./agents/USER_GUIDE.md)
+- [Workflow 用户指南](./workflows/USER_GUIDE.md)
+- [Plan+Todo 完整用户手册](./plan-todo/COMPLETE_USER_MANUAL.md)
+- [Plan+Todo 快速指南](./plan-todo/USER_GUIDE.md)
+- [添加新模型指南](./models/add-new-model-guide.md)
 
 ### 💻 代码实现
 - Agents: `packages/core/src/agents/`

@@ -14,10 +14,11 @@ TianGong CLI 的 Agents 系统提供了完整的智能代理管理功能，包�
 
 | 文档 | 说明 | 状态 |
 |------|------|------|
+| [USER_GUIDE.md](./USER_GUIDE.md) | 完整用户使用手册 | ✅ 已完成 |
+| [QUICK_START.md](./QUICK_START.md) | 快速开始指南 | ✅ 已完成 |
 | [DESIGN.md](./DESIGN.md) | 整体架构设计和技术方案 | ✅ 已完成 |
 | [IMPLEMENTATION.md](./IMPLEMENTATION.md) | 实现细节和代码结构 | ✅ 已完成 |
 | [COMMANDS.md](./COMMANDS.md) | CLI 命令参考手册 | ✅ 已完成 |
-| [QUICK_START.md](./QUICK_START.md) | 快速开始指南 | ✅ 已完成 |
 
 ---
 

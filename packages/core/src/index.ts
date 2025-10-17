@@ -30,7 +30,6 @@ export {
   // Adapters
   OpenAIAdapter,
   ClaudeAdapter,
-  QwenAdapter,
   CustomAdapter,
   CustomResponseFormat,
   // Router and registry

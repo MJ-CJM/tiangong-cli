@@ -50,6 +50,20 @@ export interface ModelCapabilities {
 }
 
 /**
+ * Provider metadata for identity and environment variables
+ */
+export interface ProviderMetadata {
+  /** Provider name for identity (e.g., 'qwen', 'deepseek', 'openai') */
+  providerName?: string;
+  /** Display name for the provider (e.g., '通义千问', 'DeepSeek') */
+  displayName?: string;
+  /** Environment variable names to search for API key */
+  envKeyNames?: string[];
+  /** Additional custom metadata */
+  [key: string]: any;
+}
+
+/**
  * Configuration for a specific model provider
  */
 export interface ModelConfig {
@@ -71,6 +85,9 @@ export interface ModelConfig {
 
   /** Model capabilities and limits */
   capabilities?: ModelCapabilities;
+
+  /** Provider metadata for identity and configuration */
+  metadata?: ProviderMetadata;
 
   /** @deprecated Use capabilities.maxOutputTokens instead */
   maxOutputTokens?: number;
@@ -144,6 +161,7 @@ export interface UnifiedRequest {
   temperature?: number;
   stream?: boolean;
   systemMessage?: string;
+  toolChoice?: 'auto' | 'none' | 'required' | { type: 'function'; function: { name: string } };
 }
 
 /**

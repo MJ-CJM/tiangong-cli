@@ -261,7 +261,9 @@ export class GeminiClient {
     try {
       const userMemory = this.config.getUserMemory();
       const model = this.config.getModel();
-      const systemInstruction = getCoreSystemPrompt(userMemory, model);
+      const modelConfig = this.config.getModelConfig();
+      const providerName = modelConfig?.metadata?.providerName || modelConfig?.provider;
+      const systemInstruction = getCoreSystemPrompt(userMemory, model, providerName);
 
       const config: GenerateContentConfig = { ...this.generateContentConfig };
 
@@ -616,7 +618,9 @@ export class GeminiClient {
     try {
       const userMemory = this.config.getUserMemory();
       const model = this.config.getModel();
-      const systemInstruction = getCoreSystemPrompt(userMemory, model);
+      const modelConfig = this.config.getModelConfig();
+      const providerName = modelConfig?.metadata?.providerName || modelConfig?.provider;
+      const systemInstruction = getCoreSystemPrompt(userMemory, model, providerName);
       const requestConfig = {
         abortSignal,
         ...this.generateContentConfig,
@@ -741,7 +745,9 @@ export class GeminiClient {
     try {
       const userMemory = this.config.getUserMemory();
       const model = this.config.getModel();
-      const systemInstruction = getCoreSystemPrompt(userMemory, model);
+      const modelConfig = this.config.getModelConfig();
+      const providerName = modelConfig?.metadata?.providerName || modelConfig?.provider;
+      const systemInstruction = getCoreSystemPrompt(userMemory, model, providerName);
 
       const requestConfig: GenerateContentConfig = {
         abortSignal,
@@ -1018,7 +1024,8 @@ export class GeminiClient {
 
       // Get system instruction for all model types
       const userMemory = this.config.getUserMemory();
-      let systemInstruction = getCoreSystemPrompt(userMemory, actualModelName);
+      const providerName = modelConfig?.metadata?.providerName || modelConfig?.provider;
+      let systemInstruction = getCoreSystemPrompt(userMemory, actualModelName, providerName);
 
       // In Plan mode, append Plan-specific system prompt
       if (this.planModeActive) {

@@ -16,7 +16,6 @@ import type {
 import {
   AbstractModelClient,
   AuthenticationError,
-  InvalidRequestError,
   ServiceUnavailableError,
   createErrorFromResponse
 } from '../base/index.js';
@@ -25,6 +24,7 @@ import { APITranslator } from '../utils/apiTranslator.js';
 
 /**
  * OpenAI model adapter implementing the BaseModelClient interface
+ * Supports OpenAI and all OpenAI-compatible providers (Qwen, DeepSeek, etc.)
  */
 export class OpenAIAdapter extends AbstractModelClient {
   private readonly defaultBaseUrl = 'https://api.openai.com/v1';
@@ -32,10 +32,9 @@ export class OpenAIAdapter extends AbstractModelClient {
   constructor(config: ModelConfig) {
     super(config);
 
-    // Validate that this is an OpenAI configuration
-    if (config.provider !== 'openai') {
-      throw new InvalidRequestError(config.provider, 'OpenAIAdapter can only be used with OpenAI provider');
-    }
+    // Note: Removed COMPATIBLE_PROVIDERS validation
+    // Now accepts any provider='openai' configuration with custom baseUrl and metadata
+    // This allows supporting any OpenAI-compatible API without code changes
   }
 
   /**
@@ -46,19 +45,54 @@ export class OpenAIAdapter extends AbstractModelClient {
   }
 
   /**
-   * Get the effective API key for OpenAI
+   * Get the effective API key for OpenAI-compatible providers
+   * Supports metadata.envKeyNames for custom environment variable discovery
    */
   protected override getApiKey(): string {
     if (this.config.apiKey) {
       return this.config.apiKey;
     }
 
-    const openaiKey = process.env['OPENAI_API_KEY'];
-    if (openaiKey) {
-      return openaiKey;
+    // 1. Priority: Use metadata.envKeyNames if provided
+    const customEnvKeys = this.config.metadata?.envKeyNames;
+    if (customEnvKeys && Array.isArray(customEnvKeys) && customEnvKeys.length > 0) {
+      for (const keyName of customEnvKeys) {
+        const value = process.env[keyName];
+        if (value) {
+          return value;
+        }
+      }
     }
 
-    throw new AuthenticationError(this.config.provider, 'No API key found for OpenAI. Set OPENAI_API_KEY environment variable.');
+    // 2. Fallback: Use metadata.providerName or provider to lookup default env vars
+    const providerName = this.config.metadata?.providerName || this.config.provider;
+    const defaultEnvKeyMap: Record<string, string[]> = {
+      'openai': ['OPENAI_API_KEY'],
+      'qwen': ['QWEN_API_KEY', 'QWEN_CODER_API_KEY', 'DASHSCOPE_API_KEY'],
+      'deepseek': ['DEEPSEEK_API_KEY'],
+      'moonshot': ['MOONSHOT_API_KEY', 'KIMI_API_KEY'],
+      'zhipu': ['ZHIPU_API_KEY', 'GLM_API_KEY'],
+      'minimax': ['MINIMAX_API_KEY'],
+    };
+
+    const possibleKeys = defaultEnvKeyMap[providerName as string] || ['OPENAI_API_KEY'];
+
+    for (const keyName of possibleKeys) {
+      const value = process.env[keyName];
+      if (value) {
+        return value;
+      }
+    }
+
+    // Build helpful error message
+    const envKeyHints = customEnvKeys && customEnvKeys.length > 0
+      ? customEnvKeys.join(', ')
+      : possibleKeys.join(', ');
+
+    throw new AuthenticationError(
+      this.config.provider,
+      `No API key found. Set apiKey in config or environment variable: ${envKeyHints}`
+    );
   }
 
   /**
@@ -124,18 +158,28 @@ export class OpenAIAdapter extends AbstractModelClient {
     try {
       // Check if model supports multimodal format (default true for OpenAI)
       const supportsMultimodal = this.config.capabilities?.supportsMultimodal ?? true;
+      const supportsFunctionCalling = this.config.capabilities?.supportsFunctionCalling ?? true;
 
       if (process.env['DEBUG_MESSAGE_FORMAT']) {
         console.log('[DEBUG] OpenAIAdapter.generateContent:', {
           provider: this.config.provider,
           model: this.config.model,
           supportsMultimodal,
+          supportsFunctionCalling,
           capabilities: this.config.capabilities,
-          messageCount: request.messages.length
+          messageCount: request.messages.length,
+          hasTools: !!request.tools
         });
       }
 
-      const openaiRequest = APITranslator.unifiedToOpenaiRequest(request, supportsMultimodal);
+      // Filter out tools if model doesn't support function calling
+      const cleanedRequest: UnifiedRequest = supportsFunctionCalling ? request : {
+        ...request,
+        tools: undefined,
+        toolChoice: undefined
+      };
+
+      const openaiRequest = APITranslator.unifiedToOpenaiRequest(cleanedRequest, supportsMultimodal);
       openaiRequest.model = this.config.model;
 
       // Debug: Log the system message being sent
@@ -170,7 +214,16 @@ export class OpenAIAdapter extends AbstractModelClient {
     try {
       // Check if model supports multimodal format (default true for OpenAI)
       const supportsMultimodal = this.config.capabilities?.supportsMultimodal ?? true;
-      const openaiRequest = APITranslator.unifiedToOpenaiRequest(request, supportsMultimodal);
+      const supportsFunctionCalling = this.config.capabilities?.supportsFunctionCalling ?? true;
+
+      // Filter out tools if model doesn't support function calling
+      const cleanedRequest: UnifiedRequest = supportsFunctionCalling ? request : {
+        ...request,
+        tools: undefined,
+        toolChoice: undefined
+      };
+
+      const openaiRequest = APITranslator.unifiedToOpenaiRequest(cleanedRequest, supportsMultimodal);
       openaiRequest.model = this.config.model;
       openaiRequest.stream = true;
 

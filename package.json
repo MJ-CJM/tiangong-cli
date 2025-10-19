@@ -1,6 +1,6 @@
 {
   "name": "tiangong-cli",
-  "version": "0.1.1",
+  "version": "1.0.0",
   "description": "TianGong CLI - Enhanced AI command-line tool with custom models, agents system, and workflow orchestration",
   "keywords": ["ai", "cli", "gemini", "agent", "workflow", "qwen", "deepseek", "tiangong"],
   "author": "mj-cjm <japycjm@gmail.com>",

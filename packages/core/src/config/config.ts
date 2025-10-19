@@ -35,6 +35,12 @@ import { ReadManyFilesTool } from '../tools/read-many-files.js';
 import { MemoryTool, setGeminiMdFilename } from '../tools/memoryTool.js';
 import { WebSearchTool } from '../tools/web-search.js';
 import { CreatePlanTool } from '../tools/create-plan.js';
+import { createConstitutionTool } from '../tools/create-constitution.js';
+import { createSpecTool } from '../tools/create-spec.js';
+import { createTechPlanTool } from '../tools/create-tech-plan.js';
+import { createSpecToTasksTool } from '../tools/spec-to-tasks.js';
+import { createExecuteTaskTool } from '../tools/execute-task.js';
+import { createUpdateTaskStatusTool } from '../tools/update-task-status.js';
 import { GeminiClient } from '../core/client.js';
 import { BaseLlmClient } from '../core/baseLlmClient.js';
 import { FileDiscoveryService } from '../services/fileDiscoveryService.js';
@@ -1363,6 +1369,14 @@ export class Config {
     registerCoreTool(MemoryTool);
     registerCoreTool(WebSearchTool, this);
     registerCoreTool(CreatePlanTool);
+
+    // Spec-Driven Development tools
+    registry.registerTool(createConstitutionTool(this));
+    registry.registerTool(createSpecTool(this));
+    registry.registerTool(createTechPlanTool(this));
+    registry.registerTool(createSpecToTasksTool(this));
+    registry.registerTool(createExecuteTaskTool(this));
+    registry.registerTool(createUpdateTaskStatusTool(this));
 
     await registry.discoverAllTools();
     return registry;

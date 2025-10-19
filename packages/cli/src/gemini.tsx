@@ -297,6 +297,7 @@ export async function main() {
         new ExtensionEnablementManager(ExtensionStorage.getUserExtensionsDir()),
         sessionId,
         argv,
+        process.cwd(),
       );
 
       if (
@@ -376,6 +377,7 @@ export async function main() {
       extensionEnablementManager,
       sessionId,
       argv,
+      process.cwd(),
     );
 
     // Cleanup sessions after config initialization

@@ -170,3 +170,8 @@ export * from './test-utils/index.js';
 
 // Export Agents System
 export * from './agents/index.js';
+
+// Export Spec-Driven Development System
+export * from './spec/types.js';
+export * from './spec/SpecManager.js';
+export * from './spec/SpecValidator.js';

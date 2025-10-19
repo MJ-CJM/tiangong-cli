@@ -1,0 +1,42 @@
+{
+  "version": "1.0.0",
+  "projectType": "CLI Tool - AI-powered development assistant",
+  "principles": [
+    "Prioritize composition over inheritance for code reusability",
+    "Write comprehensive tests for all critical paths and edge cases",
+    "Maintain clear separation of concerns between CLI (UI) and Core (logic) packages",
+    "Document all public APIs and complex algorithms",
+    "Keep dependencies minimal and well-justified",
+    "Embrace functional programming patterns where appropriate",
+    "Design for extensibility through plugin systems (MCP, tools)"
+  ],
+  "constraints": [
+    "Must support Node.js 20+ only",
+    "No external runtime dependencies beyond Node.js",
+    "Must work cross-platform (macOS, Linux, Windows)",
+    "CLI commands must respond within 100ms for non-AI operations",
+    "Bundle size should remain under 10MB"
+  ],
+  "qualityStandards": {
+    "testing": "Maintain 80%+ code coverage with unit tests and integration tests. All new features must include tests.",
+    "security": "Follow OWASP Top 10 guidelines. Implement sandboxing for unsafe operations. Regular security audits for dependencies.",
+    "performance": "CLI startup time < 500ms. Command response time < 100ms for non-AI operations. AI streaming responses should start within 2s."
+  },
+  "architectureGuidelines": [
+    "Use monorepo structure with clear package boundaries",
+    "Implement layered architecture: UI (CLI) → Services → Core → Tools",
+    "Use dependency injection for services and configuration",
+    "Implement tool registry pattern for extensibility",
+    "Use context-based state management in React/Ink components",
+    "Follow ESM module system throughout"
+  ],
+  "codingStandards": {
+    "typescript": "Use strict TypeScript configuration. Prefer type safety over convenience.",
+    "formatting": "Use Prettier for consistent formatting. ESLint for code quality.",
+    "imports": "Use explicit file extensions (.js) for all imports. Prefer named exports.",
+    "errorHandling": "Use Result types or explicit error handling. Avoid silent failures.",
+    "async": "Prefer async/await over promises. Handle AbortSignal for cancellation."
+  },
+  "createdAt": "2025-10-17T00:00:00.000Z",
+  "updatedAt": "2025-10-17T00:00:00.000Z"
+}

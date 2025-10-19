@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  支持自定义模型 • Agents 智能体系统 • 智能路由与协作 • 模式切换系统
+  支持自定义模型 • Agents 智能体系统 • 智能路由与协作 • Plan-Todo 模式 • 规格驱动开发
 </p>
 
 ---
@@ -34,7 +34,7 @@
 | 🧭 **智能路由与移交** | 自动选择最佳 Agent，支持 Agent 间协作 | ✅ 已完成 |
 | 🔄 **Workflow 工作流** | 多 Agent 编排，支持顺序和并行执行 | ✅ 已完成 |
 | 📋 **Plan+Todo 模式** | 先规划后执行，结构化任务分解和管理 | ✅ 已完成 |
-| 🎯 **模式切换系统** | Plan、Spec、Code 等专业模式切换 | 📋 计划中 |
+| 📐 **Spec 规格驱动开发** | Constitution → Spec → Plan → Tasks → Execute 完整链路 | ✅ 已完成 |
 
 ### ⚡ 继承的强大功能
 
@@ -681,22 +681,55 @@ Testing: Unit tests + Integration tests
 
 ---
 
-### 6️⃣ 模式切换系统 📋
+### 6️⃣ Spec 规格驱动开发 ✅
 
-专业化的工作模式，针对不同开发阶段提供定制化体验。
+受 **GitHub Spec Kit** 启发的结构化软件开发系统，将"意图 → 规格 → 方案 → 任务 → 实施"做成可复用、可审查的链路。
 
-#### 计划支持的模式
+#### 核心流程
 
-| 模式 | 说明 | 特点 |
-|------|------|------|
-| **Plan 模式** | 需求分析和规划 | 分解任务、制定计划、评估可行性 |
-| **Spec 模式** | 技术规格设计 | API 设计、数据结构、架构方案 |
-| **Code 模式** | 代码实现 | 编写代码、调试、优化（默认模式） |
-| **Review 模式** | 代码审查 | 质量检查、安全审计、性能分析 |
-| **Test 模式** | 测试编写 | 单元测试、集成测试、端到端测试 |
-| **Debug 模式** | 问题诊断 | 错误分析、性能调优、问题定位 |
+```
+Constitution (宪章) → Specification (规格) → Technical Plan (技术方案) → Tasks (任务) → Implementation (实施)
+```
 
-#### 模式切换示例（计划）
+#### 核心特性
+
+- 🏛️ **Constitution 宪章**：定义项目工程原则、质量标准、架构指南
+- 📋 **Specification 规格**：业务需求文档化，专注 WHAT 和 WHY
+- 🏗️ **Technical Plan 方案**：技术设计，支持多版本（v1, v2...）
+- ✅ **Task List 任务**：可执行任务，支持多变体（default, detailed...）
+- 🚀 **自动执行**：批量执行任务，依赖解析，进度跟踪
+
+#### 快速使用
+
+```bash
+# 1. 创建宪章（一次性）
+/spec constitution --init
+
+# 2. 创建业务规格
+/spec new
+# → AI 引导，生成 feat-user-auth
+
+# 3. 生成技术方案
+/spec plan new feat-user-auth
+# → AI 设计，生成 plan-feat-user-auth-v1
+
+# 4. 生成任务列表
+/spec tasks new plan-feat-user-auth-v1
+# → AI 拆分，生成 plan-feat-user-auth-v1-default
+
+# 5. 批量执行任务
+/spec execute start plan-feat-user-auth-v1-default
+# → AI 自动执行所有任务
+```
+
+#### 典型应用场景
+
+- 🆕 **新功能开发**：完整的需求 → 设计 → 实施流程
+- 🐛 **Bug 修复**：问题规格化，系统性解决
+- 🔄 **代码重构**：风险评估，安全重构
+- 📈 **架构升级**：多方案对比，选择最优
+
+📚 **详细文档**：[快速开始](./design/spec-driven/QUICK_START_CN.md) | [用户指南](./design/spec-driven/USER_GUIDE_CN.md) | [命令参考](./design/spec-driven/COMMANDS_CN.md)
 
 ---
 
@@ -802,6 +835,36 @@ Testing: Unit tests + Integration tests
 /todos clear          # 清除所有 todos
 ```
 
+### Spec 规格驱动开发
+
+```bash
+# Constitution 宪章管理
+/spec constitution --init  # 初始化项目宪章
+/spec constitution         # 显示当前宪章
+
+# Specification 规格管理
+/spec new                  # 创建新规格（AI 引导）
+/spec list                 # 列出所有规格
+/spec show <spec-id>       # 显示规格详情
+/spec search <query>       # 搜索规格
+/spec filter category:feature  # 按类别过滤
+/spec delete <spec-id>     # 删除规格
+
+# Technical Plan 技术方案
+/spec plan new <spec-id>   # 生成技术方案
+/spec plan list <spec-id>  # 列出所有方案
+/spec plan show <plan-id>  # 显示方案详情
+/spec plan activate <plan-id>  # 激活方案
+
+# Task List 任务列表
+/spec tasks new <plan-id>  # 生成任务列表
+/spec tasks show <tasks-id>  # 显示任务详情
+
+# Execution 执行
+/spec execute start <tasks-id>  # 批量执行任务
+/spec execute status <tasks-id>  # 查看执行状态
+```
+
 ### 通用命令
 
 ```bash
@@ -831,6 +894,7 @@ Testing: Unit tests + Integration tests
 - 🚀 [Agents 快速开始](./design/agents/QUICK_START.md) - 5 分钟上手指南
 - 🔄 [Workflow 用户指南](./design/workflows/USER_GUIDE.md) - Workflow 完整使用指南
 - 📋 [Plan+Todo 用户手册](./design/plan-todo/COMPLETE_USER_MANUAL.md) - Plan+Todo 完整手册
+- 📐 [Spec 规格驱动开发](./design/spec-driven/QUICK_START_CN.md) - Spec-Driven Development 快速开始
 - 🤖 [如何添加新模型](./design/models/add-new-model-guide.md) - 自定义模型配置指南
 
 ### 设计文档
@@ -840,6 +904,7 @@ Testing: Unit tests + Integration tests
 - 🧭 [智能路由系统](./design/agents/routing/README.md) - 路由功能设计
 - 🔄 [Workflow 系统设计](./design/workflows/design.md) - 工作流架构
 - 📋 [Plan+Todo 设计](./design/plan-todo/DESIGN_AND_IMPLEMENTATION.md) - Plan+Todo 架构设计
+- 📐 [Spec 系统概览](./design/spec-driven/README.md) - Spec-Driven Development 系统设计
 - 🤖 [模型系统设计](./design/models/universal-model-support.md) - 通用模型支持架构
 
 ### 开发文档
@@ -1055,7 +1120,7 @@ export GEMINI_ROUTING_CONFIDENCE_THRESHOLD=75
 | Workflow 顺序执行 | ❌ 无 | ✅ 多 Agent 顺序编排 |
 | Workflow 并行执行 | ❌ 无 | ✅ 多 Agent 并行执行，显著提速 |
 | Plan+Todo 模式 | ❌ 无 | ✅ 先规划后执行，批量执行支持 |
-| 模式切换 | ❌ 无 | 📋 专业模式系统（计划中） |
+| Spec 规格驱动开发 | ❌ 无 | ✅ Constitution → Spec → Plan → Tasks → Execute |
 | 中文文档 | ❌ 英文为主 | ✅ 完整中文文档 |
 
 ### 兼容性

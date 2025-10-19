@@ -39,6 +39,7 @@ import { agentsCommand } from '../ui/commands/agentsCommand.js';
 import { workflowCommand } from '../ui/commands/workflowCommand.js';
 import { planCommand } from '../ui/commands/planCommand.js';
 import { todosCommand } from '../ui/commands/todosCommand.js';
+import { specCommand } from '../ui/commands/specCommand.js';
 
 /**
  * Loads the core, hard-coded slash commands that are an integral part
@@ -79,6 +80,7 @@ export class BuiltinCommandLoader implements ICommandLoader {
       privacyCommand,
       quitCommand,
       restoreCommand(this.config),
+      specCommand,
       statsCommand,
       themeCommand,
       todosCommand,

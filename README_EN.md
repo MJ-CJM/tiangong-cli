@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  Custom Models • Agent System • Intelligent Routing & Collaboration • Mode Switching
+  Custom Models • Agent System • Intelligent Routing & Collaboration • Plan-Todo Mode • Spec-Driven Development
 </p>
 
 ---
@@ -34,7 +34,7 @@
 | 🧭 **Intelligent Routing & Handoff** | Automatically select the best Agent, support Agent collaboration | ✅ Completed |
 | 🔄 **Workflow System** | Multi-Agent orchestration with sequential and parallel execution | ✅ Completed |
 | 📋 **Plan+Todo Mode** | Plan first, execute later with structured task breakdown and management | ✅ Completed |
-| 🎯 **Mode Switching System** | Professional modes like Plan, Spec, Code, etc. | 📋 Planned |
+| 📐 **Spec-Driven Development** | Constitution → Spec → Plan → Tasks → Execute complete workflow | ✅ Completed |
 
 ### ⚡ Inherited Powerful Features
 
@@ -101,27 +101,28 @@ Integrate any OpenAI-compatible AI model through simple configuration files, no 
 
 #### Quick Configuration Examples
 
-**Qwen (Tongyi Qianwen)**
+##### Step 1: Configure Models (`~/.gemini/config.json`)
 
-Add to `~/.gemini/config.json`:
+**Qwen (Tongyi Qianwen)**
 
 ```json
 {
-  "useModelRouter": true,
-  "defaultModel": "qwen-coder-plus",
+  "useModelRouter": true,                    // Required: Enable custom model support
+  "defaultModel": "qwen3-coder-flash",       // Recommended: Default model at startup
   "models": {
-    "qwen-coder-plus": {
-      "provider": "openai",
-      "model": "qwen-coder-plus",
-      "apiKey": "sk-your-api-key",
-      "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "qwen3-coder-flash": {
+      "provider": "openai",                  // Required: Use OpenAI-compatible adapter
+      "model": "qwen3-coder-flash",         // Required: Model name for API calls
+      "apiKey": "sk-your-api-key",          // Required: Get from Qwen console
+      "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",  // Required: Qwen API endpoint
       "metadata": {
-        "providerName": "qwen",
-        "displayName": "Tongyi Qianwen"
+        "providerName": "qwen",             // Recommended: Identity (AI will say "I am Qwen")
+        "displayName": "Tongyi Qianwen"     // Optional: UI display name
       },
       "capabilities": {
-        "maxOutputTokens": 8192,
-        "supportsFunctionCalling": true
+        "maxOutputTokens": 8192,            // Recommended: Max output tokens
+        "supportsFunctionCalling": true,   // Important: Qwen supports tools (must be true)
+        "supportsMultimodal": true         // Important: Qwen supports array format (must be true)
       }
     }
   }
@@ -144,22 +145,47 @@ Add to `~/.gemini/config.json`:
       },
       "capabilities": {
         "maxOutputTokens": 4096,
-        "supportsFunctionCalling": false,
-        "supportsMultimodal": false
+        "supportsFunctionCalling": false,  // Important: DeepSeek doesn't support (must be false)
+        "supportsMultimodal": false        // Important: DeepSeek doesn't support (must be false)
       }
     }
   }
 }
 ```
 
-#### Using Custom Models
+**⚠️ Important**:
+- Qwen: `supportsFunctionCalling` and `supportsMultimodal` must be `true`
+- DeepSeek: `supportsFunctionCalling` and `supportsMultimodal` must be `false`
+
+##### Step 2: Configure System Settings (`~/.gemini/settings.json`)
+
+```json
+{
+  "experimental": {
+    "useModelRouter": true                   // Required: Work with config.json to enable custom models
+  },
+  "security": {
+    "auth": {
+      "selectedType": "custom-model"         // Recommended: Use custom model authentication
+    }
+  },
+  "model": {
+    "name": "qwen3-coder-flash"             // Optional: Current model in use
+  }
+}
+```
+
+##### Step 3: Use Custom Models
 
 ```bash
 # Switch model
-/model use qwen-coder-plus
+/model use qwen3-coder-flash
 
-# Or specify at startup
-gemini --model deepseek-coder
+# View current model
+/model info
+
+# List all models
+/model list
 ```
 
 📚 **Detailed Documentation**: [How to Add New Models](./design/models/add-new-model-guide.md) | [Model System Design](./design/models/universal-model-support.md) | [Model System Overview](./design/models/README.md)
@@ -579,22 +605,25 @@ ${parallelGroupId.data.total_count}
 
 ---
 
-### 5️⃣ Mode Switching System 📋
+### 6️⃣ Spec-Driven Development ✅
 
-Specialized work modes providing customized experiences for different development stages.
+A structured software development system inspired by **GitHub Spec Kit**, transforming "Intent → Specification → Plan → Tasks → Implementation" into a reusable and reviewable workflow.
 
-#### Planned Supported Modes
+#### Core Workflow
 
-| Mode | Description | Features |
-|------|-------------|----------|
-| **Plan Mode** | Requirements analysis and planning | Task decomposition, planning, feasibility assessment |
-| **Spec Mode** | Technical specification design | API design, data structures, architecture proposals |
-| **Code Mode** | Code implementation | Write code, debug, optimize (default mode) |
-| **Review Mode** | Code review | Quality check, security audit, performance analysis |
-| **Test Mode** | Test writing | Unit tests, integration tests, end-to-end tests |
-| **Debug Mode** | Problem diagnosis | Error analysis, performance tuning, problem locating |
+```
+Constitution → Specification → Technical Plan → Tasks → Implementation
+```
 
-#### Mode Switching Example (Planned)
+#### Core Features
+
+- 🏛️ **Constitution**: Define project engineering principles, quality standards, and architecture guidelines
+- 📋 **Specification**: Business requirements documentation, focusing on WHAT and WHY
+- 🏗️ **Technical Plan**: Technical design with multi-version support (v1, v2...)
+- ✅ **Task List**: Executable tasks with multiple variants (default, detailed...)
+- 🚀 **Auto-Execution**: Batch task execution, dependency resolution, progress tracking
+
+#### Quick Usage
 
 ```bash
 # Switch to Plan mode
@@ -620,11 +649,19 @@ Response: { token, user }
 
 # Switch back to Code mode
 /mode code
+# Start coding
+> Implement login API
+[Code Mode] Creating files...
 ```
 
-**Current Status**: Design phase, expected to develop after Agent system stabilizes
+#### Typical Use Cases
 
-<!-- 📚 **Detailed Documentation**: Feature in planning -->
+- 🆕 **New Feature Development**: Complete requirements → design → implementation workflow
+- 🐛 **Bug Fixes**: Systematize problems for systematic solutions
+- 🔄 **Code Refactoring**: Risk assessment, safe refactoring
+- 📈 **Architecture Upgrades**: Compare multiple approaches, choose the best
+
+📚 **Detailed Documentation**: [Quick Start](./design/spec-driven/QUICK_START_CN.md) | [User Guide](./design/spec-driven/USER_GUIDE_CN.md) | [Command Reference](./design/spec-driven/COMMANDS_CN.md)
 
 ---
 
@@ -712,6 +749,54 @@ Response: { token, user }
 /workflow delete <workflow-name>
 ```
 
+### Plan+Todo Management
+
+```bash
+# Plan mode operations
+[Ctrl+P]              # Toggle Plan mode
+/plan show            # Show current plan
+/plan to-todos        # Convert to todos
+/plan clear           # Clear plan
+
+# Todo management
+/todos list           # List all todos
+/todos execute <id> [--mode=auto_edit|default]  # Execute single todo
+/todos execute-all [--mode=auto_edit|default]   # Batch execute all todos
+/todos update <id> <status>  # Update todo status
+/todos export         # Export to JSON
+/todos clear          # Clear all todos
+```
+
+### Spec-Driven Development
+
+```bash
+# Constitution management
+/spec constitution --init  # Initialize project constitution
+/spec constitution         # Show current constitution
+
+# Specification management
+/spec new                  # Create new specification (AI-guided)
+/spec list                 # List all specifications
+/spec show <spec-id>       # Show specification details
+/spec search <query>       # Search specifications
+/spec filter category:feature  # Filter by category
+/spec delete <spec-id>     # Delete specification
+
+# Technical Plan
+/spec plan new <spec-id>   # Generate technical plan
+/spec plan list <spec-id>  # List all plans
+/spec plan show <plan-id>  # Show plan details
+/spec plan activate <plan-id>  # Activate plan
+
+# Task List
+/spec tasks new <plan-id>  # Generate task list
+/spec tasks show <tasks-id>  # Show task details
+
+# Execution
+/spec execute start <tasks-id>  # Batch execute tasks
+/spec execute status <tasks-id>  # View execution status
+```
+
 ### General Commands
 
 ```bash
@@ -741,6 +826,7 @@ Response: { token, user }
 - 🚀 [Agents Quick Start](./design/agents/QUICK_START.md) - 5-minute tutorial
 - 🔄 [Workflow User Guide](./design/workflows/USER_GUIDE.md) - Complete Workflow usage guide
 - 📋 [Plan+Todo User Manual](./design/plan-todo/COMPLETE_USER_MANUAL.md) - Complete Plan+Todo manual
+- 📐 [Spec-Driven Development](./design/spec-driven/QUICK_START_CN.md) - Spec-Driven Development quick start
 - 🤖 [How to Add New Models](./design/models/add-new-model-guide.md) - Custom model configuration guide
 
 ### Design Documents
@@ -750,6 +836,7 @@ Response: { token, user }
 - 🧭 [Intelligent Routing](./design/agents/routing/README.md) - Routing feature design
 - 🔄 [Workflow System Design](./design/workflows/design.md) - Workflow architecture
 - 📋 [Plan+Todo Design](./design/plan-todo/DESIGN_AND_IMPLEMENTATION.md) - Plan+Todo architecture design
+- 📐 [Spec System Overview](./design/spec-driven/README.md) - Spec-Driven Development system design
 - 🤖 [Model System Design](./design/models/universal-model-support.md) - Universal model support architecture
 
 ### Development Documentation
@@ -762,46 +849,72 @@ Response: { token, user }
 
 ## 🎨 Configuration Examples
 
-### Multi-Model Configuration
+### `~/.gemini/config.json` - Multi-Model Configuration
 
 ```json
 {
-  "useModelRouter": true,
-  "defaultModel": "qwen-coder-plus",
+  // ========== Top-level Configuration ==========
+  "useModelRouter": true,                    // Required: Enable custom model support
+  "defaultModel": "qwen3-coder-flash",       // Recommended: Default model at startup
+  
+  // ========== Model Definitions ==========
   "models": {
+    // Qwen Flash (Recommended for daily development)
+    "qwen3-coder-flash": {
+      "provider": "openai",                  // Required: OpenAI-compatible adapter
+      "model": "qwen3-coder-flash",         // Required: Model name for API calls
+      "apiKey": "sk-your-qwen-api-key",     // Required: Get from Qwen console
+      "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",  // Required: Qwen API endpoint
+      "metadata": {
+        "providerName": "qwen",             // Recommended: Identity (AI will say "I am Qwen")
+        "displayName": "Tongyi Qianwen Flash"  // Optional: UI display name
+      },
+      "capabilities": {
+        "maxOutputTokens": 8192,            // Recommended: Max output tokens
+        "supportsFunctionCalling": true,   // Important: Qwen supports tools (must be true)
+        "supportsMultimodal": true         // Important: Qwen supports array format (must be true)
+      }
+    },
+    
+    // Qwen Plus (Advanced tasks)
     "qwen-coder-plus": {
       "provider": "openai",
       "model": "qwen-coder-plus",
-      "apiKey": "sk-qwen-key",
+      "apiKey": "sk-your-qwen-api-key",
       "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
       "metadata": {
         "providerName": "qwen",
-        "displayName": "Tongyi Qianwen"
+        "displayName": "Tongyi Qianwen Plus"
       },
       "capabilities": {
         "maxOutputTokens": 8192,
-        "supportsFunctionCalling": true
+        "supportsFunctionCalling": true,
+        "supportsMultimodal": true
       }
     },
+    
+    // DeepSeek (Code generation)
     "deepseek-coder": {
       "provider": "openai",
       "model": "deepseek-coder",
-      "apiKey": "sk-deepseek-key",
-      "baseUrl": "https://api.deepseek.com",
+      "apiKey": "sk-your-deepseek-key",     // Required: Get from DeepSeek website
+      "baseUrl": "https://api.deepseek.com", // Required: DeepSeek API endpoint
       "metadata": {
         "providerName": "deepseek",
-        "displayName": "DeepSeek"
+        "displayName": "DeepSeek Coder"
       },
       "capabilities": {
         "maxOutputTokens": 4096,
-        "supportsFunctionCalling": false,
-        "supportsMultimodal": false
+        "supportsFunctionCalling": false,  // Important: DeepSeek doesn't support (must be false)
+        "supportsMultimodal": false        // Important: DeepSeek doesn't support (must be false)
       }
     },
+    
+    // Local Ollama (Offline development)
     "local-qwen": {
       "provider": "openai",
-      "model": "Qwen2.5-Coder-32B-Instruct",
-      "apiKey": "not-required",
+      "model": "qwen2.5-coder:32b",
+      "apiKey": "ollama",                   // Ollama doesn't need real key
       "baseUrl": "http://localhost:11434/v1",
       "metadata": {
         "providerName": "qwen",
@@ -809,12 +922,97 @@ Response: { token, user }
       },
       "capabilities": {
         "maxOutputTokens": 4096,
-        "supportsFunctionCalling": false
+        "supportsFunctionCalling": false   // Local models usually don't support
       }
     }
   }
 }
 ```
+
+### `~/.gemini/settings.json` - System Settings
+
+```json
+{
+  // ========== General Settings ==========
+  "general": {
+    "disableAutoUpdate": true,               // Recommended: Disable auto-update
+    "disableUpdateNag": true                 // Recommended: Disable update prompts
+  },
+  
+  // ========== IDE Integration ==========
+  "ide": {
+    "hasSeenNudge": true                     // Internal: Seen the prompt
+  },
+  
+  // ========== MCP Servers ==========
+  "mcpServers": {
+    "context7": {                            // MCP server name (optional configuration)
+      "httpUrl": "https://mcp.context7.com/mcp",  // HTTP MCP endpoint
+      "headers": {
+        "CONTEXT7_API_KEY": "your-api-key",       // API authentication
+        "Accept": "application/json, text/event-stream"
+      }
+    }
+  },
+  
+  // ========== Model Settings ==========
+  "model": {
+    "name": "qwen3-coder-flash"              // Current model in use
+  },
+  
+  // ========== Security Settings ==========
+  "security": {
+    "auth": {
+      "selectedType": "custom-model"         // Required: Use custom model authentication
+    }
+  },
+  
+  // ========== Experimental Features ==========
+  "experimental": {
+    "useModelRouter": true                   // Required: Enable model routing (work with config.json)
+  },
+  
+  // ========== Trusted Folders ==========
+  "trustedFolders": [
+    "/path/to/your/trusted/project"          // Optional: Trusted project directories
+  ]
+}
+```
+
+### Configuration Field Descriptions
+
+#### config.json Core Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `useModelRouter` | boolean | ✅ Yes | Enable custom model support, **must be `true`** |
+| `defaultModel` | string | ⚠️ Recommended | Default model name, must be defined in `models` |
+| `models.<name>.provider` | string | ✅ Yes | Provider: `"openai"` (compatible), `"gemini"`, `"claude"` |
+| `models.<name>.model` | string | ✅ Yes | Actual model name for API calls |
+| `models.<name>.apiKey` | string | ⚠️ Recommended | API key (can also use environment variables) |
+| `models.<name>.baseUrl` | string | ✅ Yes | API server address |
+| `metadata.providerName` | string | ⚠️ Recommended | Identity: `"qwen"`, `"deepseek"`, etc. |
+| `metadata.displayName` | string | ❌ No | UI display name |
+| `capabilities.maxOutputTokens` | number | ⚠️ Recommended | Max output tokens |
+| `capabilities.supportsFunctionCalling` | boolean | ⚠️ Recommended | Supports tool calling (Qwen=true, DeepSeek=false) |
+| `capabilities.supportsMultimodal` | boolean | ⚠️ Recommended | Supports array format (Qwen=true, DeepSeek=false) |
+
+#### settings.json Core Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `experimental.useModelRouter` | boolean | ✅ Yes | **Must be `true`**, work with config.json to enable custom models |
+| `security.auth.selectedType` | string | ⚠️ Recommended | Auth type: `"custom-model"` (custom), `"api-key"` (Gemini) |
+| `model.name` | string | ❌ No | Current model, auto-updated via `/model use` |
+| `general.disableAutoUpdate` | boolean | ❌ No | Disable auto-update (recommend `true`) |
+| `mcpServers.<name>` | object | ❌ No | MCP server configuration (optional) |
+| `trustedFolders` | array | ❌ No | Trusted project directory list |
+
+**⚠️ Key Tips**:
+1. `useModelRouter` in both `config.json` and `settings.json` **must be set to `true`**
+2. Qwen must set `supportsFunctionCalling: true` to use tool features
+3. DeepSeek must set `supportsFunctionCalling: false` and `supportsMultimodal: false`
+4. API Keys can also be provided via environment variables: `QWEN_API_KEY`, `DEEPSEEK_API_KEY`
 
 ### Agent Configuration
 
@@ -965,7 +1163,7 @@ TianGong CLI is developed based on Google Gemini CLI and is fully compatible wit
 | Workflow Sequential | ❌ None | ✅ Multi-Agent sequential orchestration |
 | Workflow Parallel | ❌ None | ✅ Multi-Agent parallel execution, significant speedup |
 | Plan+Todo Mode | ❌ None | ✅ Plan first execute later, batch execution support |
-| Mode Switching | ❌ None | 📋 Professional mode system (planned) |
+| Spec-Driven Development | ❌ None | ✅ Constitution → Spec → Plan → Tasks → Execute |
 | Chinese Documentation | ❌ Primarily English | ✅ Complete Chinese documentation |
 
 ### Compatibility

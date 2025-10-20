@@ -101,27 +101,28 @@ npm start
 
 #### 快速配置示例
 
-**通义千问 (Qwen)**
+##### 步骤 1：配置模型（`~/.gemini/config.json`）
 
-在 `~/.gemini/config.json` 中添加：
+**通义千问 (Qwen)**
 
 ```json
 {
-  "useModelRouter": true,
-  "defaultModel": "qwen-coder-plus",
+  "useModelRouter": true,                    // 必须：启用自定义模型支持
+  "defaultModel": "qwen3-coder-flash",       // 推荐：默认使用的模型
   "models": {
-    "qwen-coder-plus": {
-      "provider": "openai",
-      "model": "qwen-coder-plus",
-      "apiKey": "sk-your-api-key",
-      "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "qwen3-coder-flash": {
+      "provider": "openai",                  // 必须：使用 OpenAI 兼容适配器
+      "model": "qwen3-coder-flash",         // 必须：API 调用的模型名
+      "apiKey": "sk-your-api-key",          // 必须：通义千问 API Key
+      "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",  // 必须：通义千问 API 地址
       "metadata": {
-        "providerName": "qwen",
-        "displayName": "通义千问"
+        "providerName": "qwen",             // 推荐：身份标识（AI 会说"我是通义千问"）
+        "displayName": "通义千问"            // 可选：UI 显示名称
       },
       "capabilities": {
-        "maxOutputTokens": 8192,
-        "supportsFunctionCalling": true
+        "maxOutputTokens": 8192,            // 推荐：最大输出 token 数
+        "supportsFunctionCalling": true,   // 重要：Qwen 支持工具调用（必须 true）
+        "supportsMultimodal": true         // 重要：Qwen 支持数组格式（必须 true）
       }
     }
   }
@@ -144,22 +145,47 @@ npm start
       },
       "capabilities": {
         "maxOutputTokens": 4096,
-        "supportsFunctionCalling": false,
-        "supportsMultimodal": false
+        "supportsFunctionCalling": false,  // 重要：DeepSeek 不支持（必须 false）
+        "supportsMultimodal": false        // 重要：DeepSeek 不支持（必须 false）
       }
     }
   }
 }
 ```
 
-#### 使用自定义模型
+**⚠️ 重要**：
+- 通义千问：`supportsFunctionCalling` 和 `supportsMultimodal` 必须为 `true`
+- DeepSeek：`supportsFunctionCalling` 和 `supportsMultimodal` 必须为 `false`
+
+##### 步骤 2：配置系统设置（`~/.gemini/settings.json`）
+
+```json
+{
+  "experimental": {
+    "useModelRouter": true                   // 必须：与 config.json 配合启用自定义模型
+  },
+  "security": {
+    "auth": {
+      "selectedType": "custom-model"         // 推荐：使用自定义模型认证
+    }
+  },
+  "model": {
+    "name": "qwen3-coder-flash"             // 可选：当前使用的模型
+  }
+}
+```
+
+##### 步骤 3：使用自定义模型
 
 ```bash
 # 切换模型
-/model use qwen-coder-plus
+/model use qwen3-coder-flash
 
-# 或在启动时指定
-gemini --model deepseek-coder
+# 查看当前模型
+/model info
+
+# 列出所有模型
+/model list
 ```
 
 📚 **详细文档**：[添加新模型指南](./design/models/add-new-model-guide.md) | [模型系统设计](./design/models/universal-model-support.md) | [模型系统概述](./design/models/README.md)
@@ -917,46 +943,72 @@ Constitution (宪章) → Specification (规格) → Technical Plan (技术方�
 
 ## 🎨 配置示例
 
-### 多模型配置
+### `~/.gemini/config.json` - 多模型配置
 
 ```json
 {
-  "useModelRouter": true,
-  "defaultModel": "qwen-coder-plus",
+  // ========== 顶层配置 ==========
+  "useModelRouter": true,                    // 必须：启用自定义模型支持
+  "defaultModel": "qwen3-coder-flash",       // 推荐：默认模型（启动时使用）
+  
+  // ========== 模型定义 ==========
   "models": {
+    // 通义千问 Flash（推荐用于日常开发）
+    "qwen3-coder-flash": {
+      "provider": "openai",                  // 必须：OpenAI 兼容适配器
+      "model": "qwen3-coder-flash",         // 必须：API 调用的模型名
+      "apiKey": "sk-your-qwen-api-key",     // 必须：从通义千问控制台获取
+      "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",  // 必须：通义千问 API 端点
+      "metadata": {
+        "providerName": "qwen",             // 推荐：身份标识（AI 会说"我是通义千问"）
+        "displayName": "通义千问 Flash"      // 可选：UI 显示名称
+      },
+      "capabilities": {
+        "maxOutputTokens": 8192,            // 推荐：最大输出 token 数
+        "supportsFunctionCalling": true,   // 重要：Qwen 支持工具调用（必须 true）
+        "supportsMultimodal": true         // 重要：Qwen 支持数组格式（必须 true）
+      }
+    },
+    
+    // 通义千问 Plus（高级任务）
     "qwen-coder-plus": {
       "provider": "openai",
       "model": "qwen-coder-plus",
-      "apiKey": "sk-qwen-key",
+      "apiKey": "sk-your-qwen-api-key",
       "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
       "metadata": {
         "providerName": "qwen",
-        "displayName": "通义千问"
+        "displayName": "通义千问 Plus"
       },
       "capabilities": {
         "maxOutputTokens": 8192,
-        "supportsFunctionCalling": true
+        "supportsFunctionCalling": true,
+        "supportsMultimodal": true
       }
     },
+    
+    // DeepSeek（代码生成）
     "deepseek-coder": {
       "provider": "openai",
       "model": "deepseek-coder",
-      "apiKey": "sk-deepseek-key",
-      "baseUrl": "https://api.deepseek.com",
+      "apiKey": "sk-your-deepseek-key",     // 必须：从 DeepSeek 官网获取
+      "baseUrl": "https://api.deepseek.com", // 必须：DeepSeek API 端点
       "metadata": {
         "providerName": "deepseek",
-        "displayName": "DeepSeek"
+        "displayName": "DeepSeek Coder"
       },
       "capabilities": {
         "maxOutputTokens": 4096,
-        "supportsFunctionCalling": false,
-        "supportsMultimodal": false
+        "supportsFunctionCalling": false,  // 重要：DeepSeek 不支持（必须 false）
+        "supportsMultimodal": false        // 重要：DeepSeek 不支持（必须 false）
       }
     },
+    
+    // 本地 Ollama（离线开发）
     "local-qwen": {
       "provider": "openai",
-      "model": "Qwen2.5-Coder-32B-Instruct",
-      "apiKey": "not-required",
+      "model": "qwen2.5-coder:32b",
+      "apiKey": "ollama",                   // Ollama 不需要真实 key
       "baseUrl": "http://localhost:11434/v1",
       "metadata": {
         "providerName": "qwen",
@@ -964,12 +1016,97 @@ Constitution (宪章) → Specification (规格) → Technical Plan (技术方�
       },
       "capabilities": {
         "maxOutputTokens": 4096,
-        "supportsFunctionCalling": false
+        "supportsFunctionCalling": false   // 本地模型通常不支持
       }
     }
   }
 }
 ```
+
+### `~/.gemini/settings.json` - 系统设置
+
+```json
+{
+  // ========== 通用设置 ==========
+  "general": {
+    "disableAutoUpdate": true,               // 推荐：禁用自动更新
+    "disableUpdateNag": true                 // 推荐：禁用更新提示
+  },
+  
+  // ========== IDE 集成 ==========
+  "ide": {
+    "hasSeenNudge": true                     // 内部：已看过提示
+  },
+  
+  // ========== MCP 服务器 ==========
+  "mcpServers": {
+    "context7": {                            // MCP 服务器名称（可选配置）
+      "httpUrl": "https://mcp.context7.com/mcp",  // HTTP MCP 端点
+      "headers": {
+        "CONTEXT7_API_KEY": "your-api-key",       // API 认证
+        "Accept": "application/json, text/event-stream"
+      }
+    }
+  },
+  
+  // ========== 模型设置 ==========
+  "model": {
+    "name": "qwen3-coder-flash"              // 当前使用的模型
+  },
+  
+  // ========== 安全设置 ==========
+  "security": {
+    "auth": {
+      "selectedType": "custom-model"         // 必须：使用自定义模型认证
+    }
+  },
+  
+  // ========== 实验性功能 ==========
+  "experimental": {
+    "useModelRouter": true                   // 必须：启用模型路由（与 config.json 配合）
+  },
+  
+  // ========== 受信任文件夹 ==========
+  "trustedFolders": [
+    "/path/to/your/trusted/project"          // 可选：受信任的项目目录
+  ]
+}
+```
+
+### 配置字段说明
+
+#### config.json 核心字段
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `useModelRouter` | boolean | ✅ 是 | 启用自定义模型支持，**必须 `true`** |
+| `defaultModel` | string | ⚠️ 推荐 | 默认模型名，必须在 `models` 中定义 |
+| `models.<name>.provider` | string | ✅ 是 | 提供商：`"openai"`（兼容）、`"gemini"`、`"claude"` |
+| `models.<name>.model` | string | ✅ 是 | API 调用的实际模型名 |
+| `models.<name>.apiKey` | string | ⚠️ 推荐 | API 密钥（也可用环境变量） |
+| `models.<name>.baseUrl` | string | ✅ 是 | API 服务器地址 |
+| `metadata.providerName` | string | ⚠️ 推荐 | 身份标识：`"qwen"`、`"deepseek"` 等 |
+| `metadata.displayName` | string | ❌ 否 | UI 显示名称 |
+| `capabilities.maxOutputTokens` | number | ⚠️ 推荐 | 最大输出 token 数 |
+| `capabilities.supportsFunctionCalling` | boolean | ⚠️ 推荐 | 是否支持工具调用（Qwen=true, DeepSeek=false） |
+| `capabilities.supportsMultimodal` | boolean | ⚠️ 推荐 | 是否支持数组格式（Qwen=true, DeepSeek=false） |
+
+#### settings.json 核心字段
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `experimental.useModelRouter` | boolean | ✅ 是 | **必须 `true`**，与 config.json 配合启用自定义模型 |
+| `security.auth.selectedType` | string | ⚠️ 推荐 | 认证类型：`"custom-model"`（自定义模型）、`"api-key"`（Gemini） |
+| `model.name` | string | ❌ 否 | 当前模型，通过 `/model use` 自动更新 |
+| `general.disableAutoUpdate` | boolean | ❌ 否 | 禁用自动更新（推荐 `true`） |
+| `mcpServers.<name>` | object | ❌ 否 | MCP 服务器配置（可选） |
+| `trustedFolders` | array | ❌ 否 | 受信任的项目目录列表 |
+
+**⚠️ 关键提示**：
+1. `config.json` 和 `settings.json` 中的 `useModelRouter` **都必须设为 `true`**
+2. 通义千问必须设置 `supportsFunctionCalling: true` 才能使用工具功能
+3. DeepSeek 必须设置 `supportsFunctionCalling: false` 和 `supportsMultimodal: false`
+4. API Key 也可通过环境变量提供：`QWEN_API_KEY`、`DEEPSEEK_API_KEY`
 
 ### Agents 配置
 
